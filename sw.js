@@ -1,4 +1,4 @@
-const CACHE_NAME = 'sliding-puzzle-v3';
+const CACHE_NAME = 'sliding-puzzle-v4';
 const ASSETS = [
   './',
   './index.html',
