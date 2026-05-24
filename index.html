@@ -1238,6 +1238,7 @@
   const STATE = {
     mode:        'numbers',   // 'numbers' | 'letters' | 'images'
     imageDataURL: null,       // base64 صورة اللاعب المخصصة
+    _defaultImageURL: null,    // صورة افتراضية مولَّدة بـ Canvas
     gridSize:     3,           // 3 | 4 | 5
     board:       [],          // current tile values (0 = empty)
     solution:    [],          // solved state for current mode
@@ -1435,21 +1436,119 @@
   }
 
   /* Image tile rendering — Phase 2 */
+  /* ============================================================
+     DEFAULT IMAGE — generated once with Canvas, cached in STATE
+  ============================================================ */
+  function generateDefaultImage() {
+    const sz  = 512;
+    const cv  = document.createElement('canvas');
+    cv.width  = sz;
+    cv.height = sz;
+    const ctx = cv.getContext('2d');
+
+    // Background: deep dark
+    ctx.fillStyle = '#0d0d1a';
+    ctx.fillRect(0, 0, sz, sz);
+
+    // Radial gradient base
+    const base = ctx.createRadialGradient(sz/2, sz/2, 0, sz/2, sz/2, sz*0.72);
+    base.addColorStop(0,   'rgba(168,85,247,0.55)');
+    base.addColorStop(0.5, 'rgba(0,212,255,0.25)');
+    base.addColorStop(1,   'rgba(13,13,26,0.0)');
+    ctx.fillStyle = base;
+    ctx.fillRect(0, 0, sz, sz);
+
+    // Geometric grid — glowing squares
+    const cols = [
+      '#a855f7','#00d4ff','#f5c842',
+      '#22c55e','#f472b6','#fb923c',
+      '#60a5fa','#f87171','#34d399',
+    ];
+    const grid = 3, cell = sz / grid;
+    cols.forEach((color, i) => {
+      const col = i % grid, row = Math.floor(i / grid);
+      const x = col * cell, y = row * cell;
+      const pad = 18;
+      // Glow
+      const grd = ctx.createRadialGradient(
+        x + cell/2, y + cell/2, 0,
+        x + cell/2, y + cell/2, cell * 0.65
+      );
+      grd.addColorStop(0,   color + 'cc');
+      grd.addColorStop(0.6, color + '44');
+      grd.addColorStop(1,   color + '00');
+      ctx.fillStyle = grd;
+      ctx.fillRect(x, y, cell, cell);
+
+      // Rounded tile
+      ctx.save();
+      ctx.beginPath();
+      const r = 22;
+      ctx.moveTo(x+pad+r, y+pad);
+      ctx.lineTo(x+cell-pad-r, y+pad);
+      ctx.quadraticCurveTo(x+cell-pad, y+pad, x+cell-pad, y+pad+r);
+      ctx.lineTo(x+cell-pad, y+cell-pad-r);
+      ctx.quadraticCurveTo(x+cell-pad, y+cell-pad, x+cell-pad-r, y+cell-pad);
+      ctx.lineTo(x+pad+r, y+cell-pad);
+      ctx.quadraticCurveTo(x+pad, y+cell-pad, x+pad, y+cell-pad-r);
+      ctx.lineTo(x+pad, y+pad+r);
+      ctx.quadraticCurveTo(x+pad, y+pad, x+pad+r, y+pad);
+      ctx.closePath();
+      ctx.fillStyle = color + 'bb';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.restore();
+
+      // Shine
+      ctx.save();
+      const shine = ctx.createLinearGradient(x+pad, y+pad, x+cell/2, y+cell/2);
+      shine.addColorStop(0, 'rgba(255,255,255,0.22)');
+      shine.addColorStop(1, 'rgba(255,255,255,0.0)');
+      ctx.fillStyle = shine;
+      ctx.fill();
+      ctx.restore();
+    });
+
+    // Center glow overlay
+    const cg = ctx.createRadialGradient(sz/2,sz/2,0,sz/2,sz/2,sz/3);
+    cg.addColorStop(0, 'rgba(255,255,255,0.06)');
+    cg.addColorStop(1, 'rgba(255,255,255,0.0)');
+    ctx.fillStyle = cg;
+    ctx.fillRect(0,0,sz,sz);
+
+    // Grid lines
+    ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+    ctx.lineWidth = 1;
+    for (let i = 1; i < grid; i++) {
+      ctx.beginPath(); ctx.moveTo(i*cell,0); ctx.lineTo(i*cell,sz); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0,i*cell); ctx.lineTo(sz,i*cell); ctx.stroke();
+    }
+
+    return cv.toDataURL('image/png');
+  }
+
   function renderImageTile(tile, val) {
+    // Generate default image once if not set
     if (!STATE.imageDataURL) {
-      // Fallback: رسم gradient ملوّن كافتراضي
-      const colors = [
-        '#6366f1','#8b5cf6','#a855f7',
-        '#ec4899','#f43f5e','#f97316',
-        '#eab308','#22c55e'
-      ];
-      tile.style.background = colors[val - 1];
-      tile.style.boxShadow = '4px 4px 12px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.15)';
-      const span = document.createElement('span');
-      span.classList.add('tile-number');
-      span.textContent = val;
-      span.style.fontSize = 'clamp(1.4rem,4vw,2rem)';
-      tile.appendChild(span);
+      if (!STATE._defaultImageURL) {
+        STATE._defaultImageURL = generateDefaultImage();
+      }
+      // Use generated image as default
+      const url = STATE._defaultImageURL;
+      const solIdx = STATE.solution.indexOf(val);
+      const sz  = STATE.gridSize;
+      const col = solIdx % sz;
+      const row = Math.floor(solIdx / sz);
+      const boardEl  = document.getElementById('board');
+      const tileSize = boardEl.offsetWidth / sz;
+      const imgSize  = tileSize * sz;
+      tile.setAttribute('data-mode', 'images');
+      tile.style.backgroundImage    = \`url(\${url})\`;
+      tile.style.backgroundSize     = \`\${imgSize}px \${imgSize}px\`;
+      tile.style.backgroundPosition = \`\${-col * tileSize}px \${-row * tileSize}px\`;
+      tile.style.boxShadow = '4px 4px 12px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.12)';
       return;
     }
 
@@ -1648,6 +1747,7 @@
   function switchDifficulty(size) {
     if (STATE.gridSize === size) return;
     STATE.gridSize = size;
+    STATE._defaultImageURL = null; // أعد توليد الصورة الافتراضية للشبكة الجديدة
 
     document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('active'));
     document.getElementById('diff' + size).classList.add('active');
@@ -2147,6 +2247,7 @@
   </script>
 </body>
 </html>
+
 
 
 
