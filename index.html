@@ -952,6 +952,118 @@
       margin-right: auto;
     }
 
+
+    /* ============================================================
+       SECONDARY CONTROLS (Mute + Ghost)
+    ============================================================ */
+    .secondary-controls {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      width: 100%;
+    }
+
+    .ctrl-btn {
+      padding: 9px 18px;
+      border-radius: 50px;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: var(--bg-card);
+      color: var(--text-muted);
+      font-family: 'Cairo', sans-serif;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 200ms ease;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+
+    .ctrl-btn:hover {
+      color: var(--text-primary);
+      border-color: rgba(255,255,255,0.15);
+      transform: translateY(-1px);
+    }
+
+    .ctrl-btn.active {
+      background: linear-gradient(135deg, rgba(168,85,247,0.25), rgba(0,212,255,0.15));
+      border-color: rgba(168,85,247,0.45);
+      color: var(--accent-violet);
+      box-shadow: 0 2px 12px rgba(168,85,247,0.2);
+    }
+
+    .ctrl-btn.muted {
+      color: var(--danger);
+      border-color: rgba(239,68,68,0.3);
+    }
+
+    /* ============================================================
+       GHOST MODE — tile hints
+    ============================================================ */
+    .ghost-hint {
+      position: absolute;
+      bottom: 4px;
+      right: 6px;
+      font-family: 'Syne', sans-serif;
+      font-size: 0.65rem;
+      font-weight: 800;
+      color: rgba(168, 85, 247, 0.45);
+      pointer-events: none;
+      z-index: 2;
+      line-height: 1;
+    }
+
+    .tile.correct-pos {
+      box-shadow:
+        4px 4px 12px var(--tile-shadow-d),
+        -2px -2px 8px rgba(255,255,255,0.04),
+        inset 0 1px 0 rgba(255,255,255,0.12),
+        0 0 14px rgba(34, 197, 94, 0.35);
+    }
+
+    .tile.correct-pos .ghost-hint {
+      color: rgba(34, 197, 94, 0.6);
+    }
+
+    /* ============================================================
+       SHARE BUTTON (Win Overlay)
+    ============================================================ */
+    .btn-share {
+      background: linear-gradient(135deg, #0ea5e9 0%, #06b6d4 100%);
+      color: #fff;
+      box-shadow: 0 4px 16px rgba(14,165,233,0.3), inset 0 1px 0 rgba(255,255,255,0.2);
+      margin-top: 8px;
+      width: 100%;
+    }
+
+    .btn-share:hover {
+      background: linear-gradient(135deg, #38bdf8 0%, #22d3ee 100%);
+      box-shadow: 0 6px 20px rgba(14,165,233,0.4);
+      transform: translateY(-1px);
+    }
+
+    .share-toast {
+      position: fixed;
+      bottom: 32px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: var(--bg-card);
+      color: var(--accent-cyan);
+      border: 1px solid rgba(0,212,255,0.3);
+      border-radius: 50px;
+      padding: 10px 24px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      z-index: 2000;
+      opacity: 0;
+      transition: opacity 300ms ease, transform 300ms ease;
+      pointer-events: none;
+      white-space: nowrap;
+    }
+
+    .share-toast.visible {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
   </style>
 </head>
 <body>
@@ -963,6 +1075,9 @@
 
   <!-- Confetti Canvas -->
   <canvas id="confetti-canvas"></canvas>
+
+  <!-- Share Toast -->
+  <div class="share-toast" id="shareToast">✅ تم النسخ للحافظة!</div>
 
   <!-- Win Overlay -->
   <div class="win-overlay" id="winOverlay" role="dialog" aria-modal="true" aria-label="لقد فزت!">
@@ -985,6 +1100,7 @@
         <button class="btn btn-secondary" onclick="closeWin()">✕ إغلاق</button>
         <button class="btn btn-primary" onclick="startNewGame()">🔄 لعبة جديدة</button>
       </div>
+      <button class="btn btn-share" onclick="shareScore()">📤 شارك نتيجتك</button>
     </div>
   </div>
 
@@ -1075,6 +1191,12 @@
       <span>خطوة متبقية</span>
     </div>
 
+    <!-- Secondary Controls: Mute + Ghost -->
+    <div class="secondary-controls">
+      <button class="ctrl-btn" id="muteBtn" onclick="toggleMute()">🔊 الصوت</button>
+      <button class="ctrl-btn" id="ghostBtn" onclick="toggleGhostMode()">👻 الشبح</button>
+    </div>
+
     <!-- High Score Panel -->
     <div class="highscore-panel">
       <div class="highscore-title">أفضل النتائج</div>
@@ -1094,7 +1216,7 @@
       </div>
     </div>
 
-    <footer class="footer">v1.3 — Phase 4: AI Solver ✅</footer>
+    <footer class="footer">v2.0 — Phase 5: Sound + Ghost + Share ✅</footer>
 
   </div><!-- end app-wrapper -->
 
@@ -1281,6 +1403,20 @@
         tile.addEventListener('keydown', (e) => {
           if (e.key === 'Enter' || e.key === ' ') handleTileClick(idx);
         });
+
+        // Ghost Mode — show correct value hint + correct-pos highlight
+        if (GHOST.active && STATE.mode !== 'images') {
+          const correctVal = STATE.solution[idx];
+          if (correctVal > 0) {
+            const ghost = document.createElement('span');
+            ghost.className = 'ghost-hint';
+            ghost.textContent = STATE.mode === 'letters'
+              ? String.fromCharCode(64 + correctVal)
+              : correctVal;
+            tile.appendChild(ghost);
+            if (val === correctVal) tile.classList.add('correct-pos');
+          }
+        }
       }
 
       board.appendChild(tile);
@@ -1335,6 +1471,9 @@
       startTimer();
     }
 
+    // Play tick sound
+    AUDIO.playTick();
+
     // Swap tile with empty
     const emptyIdx = STATE.emptyIndex;
     STATE.board[emptyIdx] = STATE.board[tileIdx];
@@ -1371,6 +1510,7 @@
   ============================================================ */
   function handleWin() {
     stopTimer();
+    AUDIO.playWin();
     document.getElementById('boardContainer').classList.add('winning');
 
     // Animate tiles
@@ -1857,6 +1997,124 @@
     }
   }
 
+
+  /* ============================================================
+     AUDIO ENGINE — Web Audio API
+  ============================================================ */
+  const AUDIO = {
+    ctx: null,
+    muted: false,
+
+    _init() {
+      if (!this.ctx) {
+        try {
+          this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        } catch(e) { return false; }
+      }
+      if (this.ctx.state === 'suspended') this.ctx.resume();
+      return true;
+    },
+
+    playTick() {
+      if (this.muted || !this._init()) return;
+      const osc  = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.type = 'sine';
+      const t = this.ctx.currentTime;
+      osc.frequency.setValueAtTime(700, t);
+      osc.frequency.exponentialRampToValueAtTime(300, t + 0.07);
+      gain.gain.setValueAtTime(0.12, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.09);
+      osc.start(t);
+      osc.stop(t + 0.09);
+    },
+
+    playWin() {
+      if (this.muted || !this._init()) return;
+      // C-E-G-C arpeggio
+      [523.25, 659.25, 783.99, 1046.5].forEach((freq, i) => {
+        const osc  = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.type = 'sine';
+        const t = this.ctx.currentTime + i * 0.14;
+        osc.frequency.setValueAtTime(freq, t);
+        gain.gain.setValueAtTime(0.18, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.45);
+        osc.start(t);
+        osc.stop(t + 0.45);
+      });
+    },
+  };
+
+  /* Load mute preference */
+  try {
+    AUDIO.muted = localStorage.getItem('puzzle_muted') === 'true';
+  } catch {}
+
+  function toggleMute() {
+    AUDIO.muted = !AUDIO.muted;
+    try { localStorage.setItem('puzzle_muted', AUDIO.muted); } catch {}
+    const btn = document.getElementById('muteBtn');
+    if (AUDIO.muted) {
+      btn.textContent = '🔇 الصوت';
+      btn.classList.add('muted');
+    } else {
+      btn.textContent = '🔊 الصوت';
+      btn.classList.remove('muted');
+      AUDIO.playTick(); // short confirm sound
+    }
+  }
+
+  /* ============================================================
+     GHOST MODE
+  ============================================================ */
+  const GHOST = { active: false };
+
+  function toggleGhostMode() {
+    GHOST.active = !GHOST.active;
+    const btn = document.getElementById('ghostBtn');
+    btn.classList.toggle('active', GHOST.active);
+    btn.textContent = GHOST.active ? '👻 الشبح ✓' : '👻 الشبح';
+    renderBoard(); // re-render with / without ghost hints
+  }
+
+  /* ============================================================
+     SHARE SCORE
+  ============================================================ */
+  function shareScore() {
+    const time  = document.getElementById('winTime').textContent;
+    const moves = document.getElementById('winMoves').textContent;
+    const size  = STATE.gridSize;
+    const diff  = size === 3 ? 'سهل' : size === 4 ? 'متوسط' : 'صعب';
+    const text  =
+      `🧩 Sliding Puzzle — ${size}×${size} (${diff})
+` +
+      `⏱️ الوقت: ${time}   👆 الحركات: ${moves}
+` +
+      `🎮 العب الآن: https://ayad-mounir.github.io/Puzzle/`;
+
+    if (navigator.share) {
+      navigator.share({ title: '🧩 Sliding Puzzle', text }).catch(() => {});
+    } else {
+      navigator.clipboard.writeText(text).then(() => {
+        showShareToast('✅ تم النسخ للحافظة!');
+      }).catch(() => {
+        showShareToast('⚠️ المتصفح لا يدعم النسخ التلقائي');
+      });
+    }
+  }
+
+  function showShareToast(msg) {
+    const toast = document.getElementById('shareToast');
+    toast.textContent = msg;
+    toast.classList.add('visible');
+    setTimeout(() => toast.classList.remove('visible'), 2500);
+  }
+
   /* ============================================================
      BOOT
   ============================================================ */
@@ -1866,11 +2124,19 @@
       document.getElementById('loadingScreen').classList.add('hidden');
     }, 600);
 
+    // Sync mute button state on load
+    if (AUDIO.muted) {
+      const btn = document.getElementById('muteBtn');
+      btn.textContent = '🔇 الصوت';
+      btn.classList.add('muted');
+    }
+
     initGame();
   });
   </script>
 </body>
 </html>
+
 
 
 
