@@ -752,6 +752,7 @@
 
     .loading-screen.hidden {
       opacity: 0;
+      display: none !important;
       pointer-events: none;
     }
 
@@ -2230,10 +2231,12 @@
      BOOT
   ============================================================ */
   window.addEventListener('DOMContentLoaded', () => {
-    // Hide loader after fonts load
-    setTimeout(() => {
-      document.getElementById('loadingScreen').classList.add('hidden');
-    }, 600);
+    function hideLoader() {
+      var el = document.getElementById('loadingScreen');
+      if (el) { el.style.display = 'none'; }
+    }
+    setTimeout(hideLoader, 400);
+    setTimeout(hideLoader, 3000);
 
     // Sync mute button state on load
     if (AUDIO.muted) {
