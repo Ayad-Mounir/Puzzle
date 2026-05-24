@@ -70,14 +70,16 @@
   }
 
   /* ============================================================
-     Render — تحديث تدريجي في مكان الخلايا
-     ✅ لا innerHTML على كامل اللوحة → لا scroll jank أبداً
+     Render — تحديث className فقط، صفر mutations في DOM
+     ✅ كل خلية وقطعتها مُنشأة مرة واحدة فقط عند الإنشاء
+     ✅ أثناء اللعب: نغيّر className فقط → لا scroll جانبي
+     ✅ scroll position محمي بـ requestAnimationFrame
   ============================================================ */
   function damaRender() {
     const boardEl = document.getElementById('damaBoard');
     if (!boardEl) return;
 
-    /* بناء الخلايا الـ 64 لأول مرة فقط */
+    /* بناء الـ 64 خلية + قطعتها مرة واحدة فقط */
     if (_damaCells.length !== 64 || _damaBoardEl !== boardEl) {
       _damaBoardEl = boardEl;
       boardEl.innerHTML = '';
@@ -85,10 +87,13 @@
       for (let r = 0; r < 8; r++) {
         for (let c = 0; c < 8; c++) {
           const cell = document.createElement('div');
+          /* ✅ كل خلية تحتوي دائماً على div للقطعة (مخفي إذا لا قطعة) */
+          const pieceEl = document.createElement('div');
+          cell.appendChild(pieceEl);
           const row = r, col = c;
           cell.addEventListener('click', () => damaHandleClick(row, col));
           boardEl.appendChild(cell);
-          _damaCells.push(cell);
+          _damaCells.push({cell, pieceEl});
         }
       }
     }
@@ -101,34 +106,25 @@
     }
     const lastSet = new Set(DAMA.lastMove.map(lm => lm.r * 8 + lm.c));
 
-    /* تحديث كل خلية في مكانها بدون إعادة إنشاء */
+    /* ✅ تحديث className فقط — صفر إضافة/حذف DOM */
     for (let r = 0; r < 8; r++) {
       for (let c = 0; c < 8; c++) {
-        const idx  = r * 8 + c;
-        const cell = _damaCells[idx];
+        const idx = r * 8 + c;
+        const {cell, pieceEl} = _damaCells[idx];
 
+        /* Cell class */
         let cls = 'dama-cell ' + ((r + c) % 2 === 0 ? 'light' : 'dark');
-        if (lastSet.has(idx))  cls += ' last-move';
+        if (lastSet.has(idx))                              cls += ' last-move';
         if (DAMA.selected?.r === r && DAMA.selected?.c === c) cls += ' selected';
-        if (validSet.has(idx)) cls += ' possible-move';
-
+        if (validSet.has(idx))                             cls += ' possible-move';
         if (cell.className !== cls) cell.className = cls;
 
+        /* Piece class — نغيّر className فقط، العنصر دائماً موجود */
         const piece = DAMA.board[r][c];
-        if (piece) {
-          const pCls = 'dama-piece ' + piece.color + '-piece' + (piece.king ? ' king' : '');
-          const existing = cell.firstElementChild;
-          if (existing?.classList.contains('dama-piece')) {
-            if (existing.className !== pCls) existing.className = pCls;
-          } else {
-            const p = document.createElement('div');
-            p.className = pCls;
-            cell.innerHTML = '';
-            cell.appendChild(p);
-          }
-        } else {
-          if (cell.firstChild) cell.innerHTML = '';
-        }
+        const pCls = piece
+          ? 'dama-piece ' + piece.color + '-piece' + (piece.king ? ' king' : '')
+          : 'dama-piece-empty';
+        if (pieceEl.className !== pCls) pieceEl.className = pCls;
       }
     }
   }
@@ -523,6 +519,15 @@
     };
   `;
 
+  /* --- Style للقطع المخفية (inject مرة واحدة) --- */
+  (function injectEmptyPieceStyle() {
+    if (document.getElementById('_damaEmptyStyle')) return;
+    const s = document.createElement('style');
+    s.id = '_damaEmptyStyle';
+    s.textContent = '.dama-piece-empty { display: none !important; }';
+    document.head.appendChild(s);
+  })();
+
   /* --- Toggle AI --- */
   function toggleDamaAI() {
     DAMA.aiEnabled = !DAMA.aiEnabled;
@@ -569,7 +574,16 @@
       document.getElementById('damaAiBadge').classList.remove('visible');
       if (!DAMA.aiEnabled) return;
       const move = ev.data;
-      if (move) damaExecuteMove(move, true);
+      if (move) {
+        /* ✅ قفل الـ scroll أثناء تحديث اللوح */
+        const sy = window.scrollY;
+        damaExecuteMove(move, true);
+        /* استعادة الـ scroll بعد الرسم في الـ frame القادم */
+        requestAnimationFrame(() => {
+          if (window.scrollY !== sy)
+            window.scrollTo({top: sy, behavior: 'instant'});
+        });
+      }
     };
 
     DAMA.aiWorker.onerror = function(err) {
