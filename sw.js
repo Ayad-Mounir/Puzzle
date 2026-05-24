@@ -1,8 +1,12 @@
 /* ============================================================
-   SERVICE WORKER — v6.0 (Modular Architecture)
-   Caches all modular CSS/JS files
+   SERVICE WORKER — v7.0 (Auto-Update)
+   
+   آلية التحديث التلقائي:
+   - يستمع لرسالة SKIP_WAITING من العميل
+   - فور تنشيطه يُرسل رسالة SW_UPDATED لكل النوافذ
+   - العميل (utils.js) يعيد تحميل الصفحة تلقائياً
    ============================================================ */
-const CACHE_NAME = 'puzzle-v6';
+const CACHE_NAME = 'puzzle-v7';
 
 const ASSETS = [
   './',
@@ -23,45 +27,71 @@ const ASSETS = [
   // Dama
   './games/dama/style.css',
   './games/dama/game.js',
-  // Fonts (cache-bust from Google)
-  'https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=Cairo:wght@400;600;700&display=swap',
 ];
 
-self.addEventListener('install', e => {
+/* INSTALL — cache everything */
+self.addEventListener('install', (e) => {
   e.waitUntil(
-    caches.open(CACHE_NAME).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting())
+    caches.open(CACHE_NAME)
+      .then(c => c.addAll(ASSETS))
+      .then(() => {
+        // لا نستدعي skipWaiting هنا تلقائياً
+        // ننتظر رسالة SKIP_WAITING من العميل
+      })
   );
 });
 
-self.addEventListener('activate', e => {
+/* ACTIVATE — احذف الـ caches القديمة + أرسل إشعار التحديث */
+self.addEventListener('activate', (e) => {
   e.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
-    ).then(() => self.clients.claim())
+    caches.keys()
+      .then(keys =>
+        Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
+      )
+      .then(() => self.clients.claim())
+      .then(() => {
+        // أرسل رسالة لجميع النوافذ المفتوحة → سيُعيدون التحميل
+        self.clients.matchAll({ type: 'window' }).then(clients => {
+          clients.forEach(client => client.postMessage({ type: 'SW_UPDATED' }));
+        });
+      })
   );
 });
 
-self.addEventListener('fetch', e => {
+/* MESSAGE — استقبل SKIP_WAITING من العميل */
+self.addEventListener('message', (e) => {
+  if (e.data && e.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+});
+
+/* FETCH — Network-first للـ HTML، Cache-first لباقي الملفات */
+self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
 
-  // Network-first for HTML (always fresh)
+  // Network-first للـ HTML (دائماً نأخذ أحدث نسخة)
   if (e.request.mode === 'navigate' || url.pathname.endsWith('.html')) {
     e.respondWith(
-      fetch(e.request).then(r => {
-        const clone = r.clone();
-        caches.open(CACHE_NAME).then(c => c.put(e.request, clone));
-        return r;
-      }).catch(() => caches.match(e.request))
+      fetch(e.request)
+        .then(r => {
+          const clone = r.clone();
+          caches.open(CACHE_NAME).then(c => c.put(e.request, clone));
+          return r;
+        })
+        .catch(() => caches.match(e.request))
     );
     return;
   }
 
-  // Cache-first for everything else
+  // Cache-first لباقي الملفات (CSS, JS, Icons)
   e.respondWith(
-    caches.match(e.request).then(r => r || fetch(e.request).then(res => {
-      const clone = res.clone();
-      caches.open(CACHE_NAME).then(c => c.put(e.request, clone));
-      return res;
-    }))
+    caches.match(e.request).then(cached => {
+      if (cached) return cached;
+      return fetch(e.request).then(res => {
+        const clone = res.clone();
+        caches.open(CACHE_NAME).then(c => c.put(e.request, clone));
+        return res;
+      });
+    })
   );
 });
