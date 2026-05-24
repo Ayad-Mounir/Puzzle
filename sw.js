@@ -1,12 +1,12 @@
 /* ============================================================
-   SERVICE WORKER — v7.0 (Auto-Update)
+   SERVICE WORKER — v8.0 (Auto-Update)
    
    آلية التحديث التلقائي:
    - يستمع لرسالة SKIP_WAITING من العميل
    - فور تنشيطه يُرسل رسالة SW_UPDATED لكل النوافذ
    - العميل (utils.js) يعيد تحميل الصفحة تلقائياً
    ============================================================ */
-const CACHE_NAME = 'puzzle-v7';
+const CACHE_NAME = 'puzzle-v8';
 
 const ASSETS = [
   './',
