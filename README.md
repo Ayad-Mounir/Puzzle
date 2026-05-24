@@ -2,16 +2,17 @@
 
 # 🧩 Sliding Puzzle
 
-<img src="https://img.shields.io/badge/version-1.0-a855f7?style=for-the-badge&logo=puzzle&logoColor=white"/>
+<img src="https://img.shields.io/badge/version-2.0-a855f7?style=for-the-badge&logoColor=white"/>
 <img src="https://img.shields.io/badge/PWA-Ready-00d4ff?style=for-the-badge&logo=googlechrome&logoColor=white"/>
-<img src="https://img.shields.io/badge/Offline-Supported-22c55e?style=for-the-badge&logo=serviceworker&logoColor=white"/>
-<img src="https://img.shields.io/badge/Language-Arabic-f5c842?style=for-the-badge"/>
+<img src="https://img.shields.io/badge/Offline-Supported-22c55e?style=for-the-badge&logoColor=white"/>
+<img src="https://img.shields.io/badge/A*-Solver-f5c842?style=for-the-badge&logoColor=black"/>
+<img src="https://img.shields.io/badge/Language-Arabic-ef4444?style=for-the-badge"/>
 
 <br/><br/>
 
 **لعبة اللغز المنزلق الكلاسيكية — مبنية بـ Vanilla JS كـ Progressive Web App**
 
-> *"اللعبة التي أحببتها في طفولتي، أعيد بناؤها من الصفر بتقنيات الويب الحديثة"*
+> *لعبة كاملة بدون أي framework — HTML + CSS + JS خالص*
 
 <br/>
 
@@ -25,9 +26,9 @@
 
 ## ✨ نظرة عامة
 
-**Sliding Puzzle** هي نسخة ويب حديثة من لعبة اللغز المنزلق الكلاسيكية (15-Puzzle) المعروفة للجميع. الهدف: رتّب القطع بالترتيب الصحيح بأقل عدد من الحركات وأسرع وقت ممكن.
+**Sliding Puzzle v2.0** هي نسخة ويب حديثة من لعبة اللغز المنزلق الكلاسيكية. الهدف: رتّب القطع بالترتيب الصحيح بأقل عدد من الحركات وأسرع وقت ممكن.
 
-مبنية بـ **Vanilla HTML/CSS/JavaScript** بدون أي frameworks، وتعمل كـ **PWA كاملة** — تُثبَّت على أي جهاز وتعمل بدون اتصال بالإنترنت.
+مبنية بـ **Vanilla HTML/CSS/JavaScript** بدون أي frameworks — وتعمل كـ **PWA كاملة** تُثبَّت على أي جهاز وتعمل Offline.
 
 ---
 
@@ -35,49 +36,72 @@
 
 | الوضع | الوصف |
 |-------|-------|
-| 🔢 **أرقام** | رتّب الأرقام من 1 إلى 8 بالترتيب الصحيح |
-| 🔤 **حروف** | رتّب الحروف الإنجليزية من A إلى H |
-| 🖼️ **صور** | *(قريباً — Phase 2)* رتّب قطع صورة مجزأة |
+| 🔢 **أرقام** | رتّب الأرقام من 1 للأمام بالترتيب الصحيح |
+| 🔤 **حروف** | رتّب الحروف الإنجليزية بالترتيب الأبجدي |
+| 🖼️ **صور** | ارفع صورة مخصصة وشاهدها تتقطع — رتّبها مجدداً |
 
 ---
 
-## ⚙️ الميزات التقنية
+## ⚙️ مستويات الصعوبة
 
-### 🧠 منطق اللعب
-- **خوارزمية الـ Solvability** — تعتمد على عد الـ Inversions لضمان أن كل تأليفة عشوائية قابلة للحل دائماً
-- **Reset ذكي** — يُعيد اللوحة إلى حالة الخلط الأصلية لا إلى الحل
-- **تحقق فوري من الفوز** بعد كل حركة
+| المستوى | الشبكة | عدد القطع |
+|---------|--------|-----------|
+| 🟢 سهل | 3 × 3 | 8 قطع |
+| 🟡 متوسط | 4 × 4 | 15 قطعة |
+| 🔴 صعب | 5 × 5 | 24 قطعة |
 
-### 🎨 واجهة المستخدم
-- تصميم **Dark Mode** كامل بنظام ألوان CSS Variables
-- **Neumorphic tiles** بتأثيرات ظل وعمق ثلاثي الأبعاد
-- **Glow ring** ديناميكي حول اللوحة عند الفوز
-- خلفية متحركة بـ Radial Gradients
-- شاشة تحميل سلسة (Loader)
-- تصميم **Responsive** يعمل على جميع الشاشات
+---
 
-### ⚡ الأداء والتفاعل
-- **انيميشن Confetti** مبني بـ Canvas API (120 جسيم بفيزياء واقعية)
-- **انيميشن sliding bump** على القطع المتحركة
-- **تأثير win-glow** متتالي على القطع عند الفوز
-- دعم كامل لـ **لوحة المفاتيح** (Arrow Keys)
-- دعم **Touch** للأجهزة اللمسية
-- `prefers-reduced-motion` لإمكانية الوصول
+## 🤖 الحل التلقائي — A* Algorithm
 
-### 📊 نظام الإحصاءات
-- **مؤقت** يبدأ عند أول حركة
-- **عداد الحركات** في الوقت الفعلي
-- **High Score** محفوظ بـ `localStorage` لكل وضع على حدة:
+عند الضغط على **🤖 حل**، تبدأ خوارزمية **A\*** في إيجاد أقصر مسار لحل اللغز:
+
+- **Heuristic**: Manhattan Distance — تقدير المسافة الأمثل
+- تحريك القطع تلقائياً بتأخير 420ms لرؤية كل خطوة
+- شريط يُظهر عدد الخطوات المتبقية
+- إمكانية إيقاف الحل في أي لحظة
+
+---
+
+## 👻 Ghost Mode — وضع الشبح
+
+عند تفعيله، تظهر أرقام خفيفة في زاوية كل خلية تُرشدك إلى القيمة الصحيحة لتلك الموضع. القطع التي في مواضعها الصحيحة تحصل على توهج أخضر لطيف.
+
+---
+
+## 🔊 المؤثرات الصوتية
+
+أصوات تفاعلية مولَّدة بـ **Web Audio API** — بدون ملفات خارجية:
+- نقرة لطيفة عند تحريك أي قطعة
+- لحن فوز بسيط عند حل اللغز
+- زر كتم 🔇 يحفظ الإعداد تلقائياً
+
+---
+
+## 📤 مشاركة النتيجة
+
+بعد الفوز، زر **📤 شارك نتيجتك** يولّد رسالة جاهزة للمشاركة (يدعم Web Share API على الجوال، وNسخ للحافظة على سطح المكتب).
+
+---
+
+## 📊 نظام الإحصاءات
+
+- مؤقت يبدأ عند أول حركة
+- عداد الحركات في الوقت الفعلي
+- High Score منفصل لكل وضع وكل شبكة:
   - أقل عدد حركات
   - أسرع وقت
   - إجمالي الألعاب المكتملة
-- شارة **"رقم قياسي جديد"** عند تحقيق أفضل نتيجة
+- شارة **⭐ رقم قياسي جديد** عند تحقيق أفضل نتيجة
 
-### 📱 Progressive Web App
-- **Service Worker** مع استراتيجية Cache-First للعمل Offline
-- **Web App Manifest** بدعم RTL وعربي
-- **Install Banner** لتثبيت التطبيق مباشرة من المتصفح
-- أيقونات **192px و 512px** (Maskable)
+---
+
+## 📱 Progressive Web App
+
+- **Service Worker v3** — Cache-First، حذف تلقائي للـ cache القديم
+- **Web App Manifest** — دعم RTL وعربي كامل
+- **Install Banner** — تثبيت مباشر من المتصفح
+- يعمل بالكامل **Offline** بعد أول زيارة
 
 ---
 
@@ -86,32 +110,24 @@
 ```
 Puzzle/
 ├── index.html        # التطبيق كاملاً (HTML + CSS + JS)
-├── manifest.json     # إعدادات PWA
-├── sw.js             # Service Worker (cache + offline)
+├── manifest.json     # إعدادات PWA v2.0
+├── sw.js             # Service Worker v3
+├── PLAN.md           # خطة التطوير وسجل المراحل
 └── icons/
-    ├── icon-192.png  # أيقونة PWA صغيرة
-    └── icon-512.png  # أيقونة PWA كبيرة
+    ├── icon-192.png
+    └── icon-512.png
 ```
 
 ---
 
-## 🚀 تشغيل المشروع محلياً
+## 🚀 تشغيل محلياً
 
 ```bash
-# 1. استنسخ المستودع
 git clone https://github.com/Ayad-Mounir/Puzzle.git
 cd Puzzle
-
-# 2. شغّل أي سيرفر محلي بسيط
 python3 -m http.server 8080
-# أو
-npx serve .
-
-# 3. افتح في المتصفح
-# http://localhost:8080
+# افتح: http://localhost:8080
 ```
-
-> **ملاحظة:** لتفعيل Service Worker يجب تشغيل المشروع عبر سيرفر (localhost) وليس بفتح الملف مباشرةً.
 
 ---
 
@@ -119,23 +135,25 @@ npx serve .
 
 | المفتاح | الوظيفة |
 |---------|---------|
-| `→` | تحريك القطعة اليسرى نحو الفراغ |
-| `←` | تحريك القطعة اليمنى نحو الفراغ |
-| `↑` | تحريك القطعة السفلية نحو الفراغ |
-| `↓` | تحريك القطعة العلوية نحو الفراغ |
+| `→` | تحريك القطعة اليسرى للفراغ |
+| `←` | تحريك القطعة اليمنى للفراغ |
+| `↑` | تحريك القطعة السفلية للفراغ |
+| `↓` | تحريك القطعة العلوية للفراغ |
 
 ---
 
-## 🛣️ خارطة الطريق
+## 🛣️ مراحل التطوير
 
-- [x] **Phase 1** — وضع الأرقام والحروف، مؤقت، High Score، PWA، Confetti
-- [ ] **Phase 2** — وضع الصور (تقطيع صورة حقيقية + تلميحات)
-- [ ] **Phase 3** — شبكات 4×4 و 5×5 (مستوى الصعوبة)
-- [ ] **Phase 4** — حل تلقائي بـ A* Algorithm
+- [x] **Phase 1** — أرقام + حروف + مؤقت + High Score + Confetti + PWA
+- [x] **Phase 2** — وضع الصور — رفع + تقطيع + تلميح
+- [x] **Phase 3** — شبكات 3×3 / 4×4 / 5×5 ديناميكياً
+- [x] **Phase 4** — حل تلقائي بـ A* Algorithm
+- [x] **Phase 5** — صوت + Ghost Mode + Share Score
+- [x] **Phase 6** — الصقل النهائي v2.0 ← *الآن*
 
 ---
 
-## 🛠 التقنيات المستخدمة
+## 🛠 التقنيات
 
 <div align="center">
 
@@ -144,6 +162,7 @@ npx serve .
 ![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?style=flat-square&logo=javascript&logoColor=black)
 ![PWA](https://img.shields.io/badge/PWA-5A0FC8?style=flat-square&logo=pwa&logoColor=white)
 ![Canvas API](https://img.shields.io/badge/Canvas_API-FF6B35?style=flat-square)
+![Web Audio API](https://img.shields.io/badge/Web_Audio_API-22c55e?style=flat-square)
 
 </div>
 
@@ -164,6 +183,6 @@ npx serve .
 
 <div align="center">
 
-صُنع بـ ❤️ وذكريات الطفولة
+صُنع بـ ❤️ — Vanilla JS فقط، لا شيء آخر
 
 </div>
