@@ -757,6 +757,106 @@
     @keyframes spin {
       to { transform: rotate(360deg); }
     }
+
+    /* ============================================================
+       IMAGE MODE TILES
+    ============================================================ */
+    .tile[data-mode="images"] {
+      background-size: cover;
+      background-repeat: no-repeat;
+      cursor: pointer;
+      overflow: hidden;
+    }
+
+    .tile[data-mode="images"]::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      background: linear-gradient(145deg,
+        rgba(255,255,255,0.10) 0%,
+        rgba(255,255,255,0.02) 40%,
+        transparent 100%);
+      pointer-events: none;
+      z-index: 1;
+    }
+
+    /* Upload area */
+    .upload-area {
+      width: 100%;
+      background: var(--bg-card);
+      border: 2px dashed rgba(168,85,247,0.3);
+      border-radius: var(--radius-card);
+      padding: 16px;
+      display: none;
+      align-items: center;
+      gap: 12px;
+      cursor: pointer;
+      transition: border-color 200ms ease, background 200ms ease;
+    }
+
+    .upload-area.visible {
+      display: flex;
+    }
+
+    .upload-area:hover {
+      border-color: rgba(168,85,247,0.6);
+      background: var(--bg-tile);
+    }
+
+    .upload-icon {
+      font-size: 1.8rem;
+      flex-shrink: 0;
+    }
+
+    .upload-text {
+      flex: 1;
+      font-size: 0.82rem;
+      color: var(--text-primary);
+      line-height: 1.4;
+    }
+
+    .upload-text span {
+      color: var(--accent-violet);
+      font-weight: 700;
+    }
+
+    /* Hint overlay */
+    .hint-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(10,10,26,0.85);
+      backdrop-filter: blur(8px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 900;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 300ms ease, visibility 300ms ease;
+    }
+
+    .hint-overlay.visible {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .hint-img {
+      max-width: min(85vw, 400px);
+      max-height: min(85vh, 400px);
+      border-radius: var(--radius-card);
+      box-shadow: 0 30px 80px rgba(0,0,0,0.8);
+      object-fit: cover;
+    }
+
+    .hint-label {
+      position: absolute;
+      bottom: 30%;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      letter-spacing: 2px;
+    }
+
   </style>
 </head>
 <body>
@@ -809,6 +909,24 @@
         <strong>ثبّت التطبيق</strong><br>العب بدون إنترنت من شاشتك الرئيسية
       </div>
       <button class="btn-install" id="installBtn">تثبيت</button>
+    </div>
+
+
+    <!-- Upload Area (Images Mode) -->
+    <div class="upload-area" id="uploadArea">
+      <div class="upload-icon">🖼️</div>
+      <div class="upload-text">
+        <span>اختر صورة</span> لتقطيعها كلغز<br>
+        <small style="color:var(--text-muted)">أو سنستخدم الصورة الافتراضية</small>
+      </div>
+      <input type="file" id="imageInput" accept="image/*" style="display:none"/>
+      <button class="btn-install" onclick="document.getElementById('imageInput').click()">رفع</button>
+    </div>
+
+    <!-- Hint Overlay -->
+    <div class="hint-overlay" id="hintOverlay">
+      <img class="hint-img" id="hintImg" src="" alt="الصورة الكاملة"/>
+      <div class="hint-label">اضغط في أي مكان للإغلاق</div>
     </div>
 
     <!-- Mode Switcher -->
@@ -865,7 +983,7 @@
       </div>
     </div>
 
-    <footer class="footer">v1.0 — Phase 1 Complete</footer>
+    <footer class="footer">v1.1 — Phase 2: وضع الصور ✅</footer>
 
   </div><!-- end app-wrapper -->
 
@@ -875,6 +993,7 @@
   ============================================================ */
   const STATE = {
     mode:        'numbers',   // 'numbers' | 'letters' | 'images'
+    imageDataURL: null,       // base64 صورة اللاعب المخصصة
     board:       [],          // current tile values (0 = empty)
     solution:    [],          // solved state for current mode
     emptyIndex:  8,           // position of empty tile (0-8)
@@ -1032,13 +1151,38 @@
     });
   }
 
-  /* Image tile rendering (used in Phase 2, placeholder here) */
+  /* Image tile rendering — Phase 2 */
   function renderImageTile(tile, val) {
-    const span = document.createElement('span');
-    span.classList.add('tile-number');
-    span.textContent = val;
-    tile.appendChild(span);
-    // Full image implementation in Phase 2
+    if (!STATE.imageDataURL) {
+      // Fallback: رسم gradient ملوّن كافتراضي
+      const colors = [
+        '#6366f1','#8b5cf6','#a855f7',
+        '#ec4899','#f43f5e','#f97316',
+        '#eab308','#22c55e'
+      ];
+      tile.style.background = colors[val - 1];
+      tile.style.boxShadow = '4px 4px 12px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.15)';
+      const span = document.createElement('span');
+      span.classList.add('tile-number');
+      span.textContent = val;
+      span.style.fontSize = 'clamp(1.4rem,4vw,2rem)';
+      tile.appendChild(span);
+      return;
+    }
+
+    // حساب موضع القطعة في الشبكة الأصلية
+    const solIdx = STATE.solution.indexOf(val); // موضعها في الحل
+    const col = solIdx % 3;
+    const row = Math.floor(solIdx / 3);
+
+    const boardEl  = document.getElementById('board');
+    const tileSize = boardEl.offsetWidth / 3;
+    const imgSize  = tileSize * 3;
+
+    tile.style.backgroundImage    = `url(${STATE.imageDataURL})`;
+    tile.style.backgroundSize     = `${imgSize}px ${imgSize}px`;
+    tile.style.backgroundPosition = `${-col * tileSize}px ${-row * tileSize}px`;
+    tile.style.boxShadow = '4px 4px 12px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.12)';
   }
 
   /* ============================================================
@@ -1202,17 +1346,50 @@
     document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
     document.getElementById('btn' + mode.charAt(0).toUpperCase() + mode.slice(1)).classList.add('active');
 
-    // Show/hide hint button
-    document.getElementById('hintBtn').style.display = mode === 'images' ? 'flex' : 'none';
+    // Show/hide hint button & upload area
+    const isImg = mode === 'images';
+    document.getElementById('hintBtn').style.display    = isImg ? 'flex' : 'none';
+    document.getElementById('uploadArea').classList.toggle('visible', isImg);
 
     initGame();
   }
 
   /* ============================================================
+     IMAGE UPLOAD HANDLER
+  ============================================================ */
+  document.getElementById('imageInput').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(ev) {
+      STATE.imageDataURL = ev.target.result;
+      initGame(); // أعد اللعبة بالصورة الجديدة
+    };
+    reader.readAsDataURL(file);
+  });
+
+  // إغلاق hint عند الضغط
+  document.getElementById('hintOverlay').addEventListener('click', function() {
+    this.classList.remove('visible');
+  });
+
+  /* ============================================================
      HINT (Phase 2 — placeholder)
   ============================================================ */
   function showHint() {
-    alert('🖼️ وضع الصور سيكون متاحاً في المرحلة الثانية!');
+    const src = STATE.imageDataURL || null;
+    if (!src) {
+      // لا توجد صورة — اعرض رسالة
+      const overlay = document.getElementById('hintOverlay');
+      document.getElementById('hintImg').style.display = 'none';
+      overlay.classList.add('visible');
+      setTimeout(() => overlay.classList.remove('visible'), 1500);
+      return;
+    }
+    document.getElementById('hintImg').src = src;
+    document.getElementById('hintImg').style.display = 'block';
+    document.getElementById('hintOverlay').classList.add('visible');
+    setTimeout(() => document.getElementById('hintOverlay').classList.remove('visible'), 2500);
   }
 
   /* ============================================================
@@ -1356,3 +1533,4 @@
   </script>
 </body>
 </html>
+
