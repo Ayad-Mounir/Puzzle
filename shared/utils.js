@@ -29,12 +29,59 @@
     deferredInstallPrompt = null;
   });
 
+
   /* ============================================================
-     SERVICE WORKER REGISTRATION
+     SERVICE WORKER — Registration + Auto-Update
+     كيف يشتغل:
+     1. عند كل تحميل للصفحة، يتحقق من وجود SW جديد
+     2. إذا وُجد SW جديد → يثبّته فوراً (skipWaiting)
+     3. بمجرد أن يتولى SW الجديد الـ control → تعيد الصفحة تحميل نفسها
+     4. النتيجة: أي push على GitHub → عند فتح التطبيق سيجد النسخة الجديدة
   ============================================================ */
   if ('serviceWorker' in navigator) {
+
+    // 🔄 عند استلام رسالة من SW (SW يطلب reload)
+    navigator.serviceWorker.addEventListener('message', (e) => {
+      if (e.data && e.data.type === 'SW_UPDATED') {
+        window.location.reload();
+      }
+    });
+
+    // 🔄 عند تغيير الـ controller (SW جديد أصبح مسؤولاً) → reload
+    let isRefreshing = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!isRefreshing) {
+        isRefreshing = true;
+        window.location.reload();
+      }
+    });
+
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./sw.js').catch(() => {});
+      navigator.serviceWorker.register('./sw.js').then(reg => {
+
+        // إذا كان هناك SW في طور الانتظار (من زيارة سابقة) → أطلقه فوراً
+        if (reg.waiting) {
+          reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+        }
+
+        // عند اكتشاف SW جديد أثناء تثبيته
+        reg.addEventListener('updatefound', () => {
+          const newSW = reg.installing;
+          newSW.addEventListener('statechange', () => {
+            if (newSW.state === 'installed') {
+              if (navigator.serviceWorker.controller) {
+                // نسخة جديدة جاهزة — أعطِ الأمر بالتفعيل
+                newSW.postMessage({ type: 'SKIP_WAITING' });
+              }
+              // إذا لم يكن هناك controller → أول تثبيت، لا داعي لـ reload
+            }
+          });
+        });
+
+        // فحص دوري للتحديثات كل 30 دقيقة
+        setInterval(() => reg.update(), 30 * 60 * 1000);
+
+      }).catch(() => {});
     });
   }
 
@@ -148,7 +195,6 @@
 
     playWin() {
       if (this.muted || !this._init()) return;
-      // C-E-G-C arpeggio
       [523.25, 659.25, 783.99, 1046.5].forEach((freq, i) => {
         const osc  = this.ctx.createOscillator();
         const gain = this.ctx.createGain();
@@ -180,7 +226,7 @@
     } else {
       btn.textContent = '🔊 الصوت';
       btn.classList.remove('muted');
-      AUDIO.playTick(); // short confirm sound
+      AUDIO.playTick();
     }
   }
 
@@ -194,10 +240,8 @@
     const size  = STATE.gridSize;
     const diff  = size === 3 ? 'سهل' : size === 4 ? 'متوسط' : 'صعب';
     const text  =
-      `🧩 Sliding Puzzle — ${size}×${size} (${diff})
-` +
-      `⏱️ الوقت: ${time}   👆 الحركات: ${moves}
-` +
+      `🧩 Sliding Puzzle — ${size}×${size} (${diff})\n` +
+      `⏱️ الوقت: ${time}   👆 الحركات: ${moves}\n` +
       `🎮 العب الآن: https://ayad-mounir.github.io/Puzzle/`;
 
     if (navigator.share) {
