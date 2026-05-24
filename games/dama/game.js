@@ -1,9 +1,16 @@
   /* ============================================================
-     DAMA ENGINE — الداما المغربية
+     DAMA ENGINE v2.0 — الداما المغربية
+     ✅ الجندي: يتحرك للأمام قطرياً فقط (2 اتجاه)
+     ✅ الجندي: يأكل للأمام قطرياً فقط (2 اتجاه)
+     ✅ الملكة: تطير وتأكل في الاتجاهات الأربع
+     ✅ لا ترقية أثناء سلسلة الأكل
+     ✅ Render: تحديث في المكان — بدون scroll jank
+     ✅ AI: Web Worker حقيقي — لا يجمّد الواجهة
+     ✅ AI: Minimax عمق 7 + Alpha-Beta + ترتيب ذكي
   ============================================================ */
   const DAMA = {
     initialized: false,
-    board: [],          // 8×8 — null | {color:'red'|'blue', king:bool}
+    board: [],
     turn: 'red',
     selected: null,
     mustCapture: [],
@@ -12,17 +19,26 @@
     aiEnabled: false,
     aiColor: 'blue',
     aiTimer: null,
+    aiWorker: null,
     lastMove: [],
   };
+
+  /* --- Cell Cache (تجنّب إعادة بناء DOM كل مرة) --- */
+  let _damaCells = [];
+  let _damaBoardEl = null;
 
   /* --- Board Setup --- */
   function damaInit() {
     DAMA.initialized = true;
+    _damaCells = [];
+    _damaBoardEl = null;
     damaNewGame();
   }
 
   function damaNewGame() {
     clearTimeout(DAMA.aiTimer);
+    if (DAMA.aiWorker) { DAMA.aiWorker.terminate(); DAMA.aiWorker = null; }
+
     DAMA.board = Array.from({length:8}, () => Array(8).fill(null));
     DAMA.turn = 'red';
     DAMA.selected = null;
@@ -49,63 +65,77 @@
     }
   }
 
-  /* --- Board Copy (أسرع من JSON.parse/stringify) --- */
   function copyBoard(board) {
     return board.map(row => row.map(p => p ? {color:p.color, king:p.king} : null));
   }
 
-  /* --- Rendering (مع حماية الـ scroll) --- */
+  /* ============================================================
+     Render — تحديث تدريجي في مكان الخلايا
+     ✅ لا innerHTML على كامل اللوحة → لا scroll jank أبداً
+  ============================================================ */
   function damaRender() {
     const boardEl = document.getElementById('damaBoard');
     if (!boardEl) return;
 
-    // ✅ احفظ موضع الـ scroll قبل الرسم ثم أعده بعده
-    const savedScrollY = window.scrollY;
-
-    let validTargets = [];
-    if (DAMA.selected) {
-      const moves = damaGetMoves(DAMA.selected.r, DAMA.selected.c, DAMA.board);
-      validTargets = moves.map(m => ({r: m.toR, c: m.toC}));
-    }
-
-    const fragment = document.createDocumentFragment();
-
-    for (let r = 0; r < 8; r++) {
-      for (let c = 0; c < 8; c++) {
-        const cell = document.createElement('div');
-        cell.className = 'dama-cell ' + ((r + c) % 2 === 0 ? 'light' : 'dark');
-
-        if (DAMA.lastMove.some(lm => lm.r === r && lm.c === c))
-          cell.classList.add('last-move');
-        if (DAMA.selected && DAMA.selected.r === r && DAMA.selected.c === c)
-          cell.classList.add('selected');
-        if (validTargets.some(t => t.r === r && t.c === c))
-          cell.classList.add('possible-move');
-
-        const piece = DAMA.board[r][c];
-        if (piece) {
-          const p = document.createElement('div');
-          p.className = 'dama-piece ' + piece.color + '-piece' + (piece.king ? ' king' : '');
-          cell.appendChild(p);
+    /* بناء الخلايا الـ 64 لأول مرة فقط */
+    if (_damaCells.length !== 64 || _damaBoardEl !== boardEl) {
+      _damaBoardEl = boardEl;
+      boardEl.innerHTML = '';
+      _damaCells = [];
+      for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+          const cell = document.createElement('div');
+          const row = r, col = c;
+          cell.addEventListener('click', () => damaHandleClick(row, col));
+          boardEl.appendChild(cell);
+          _damaCells.push(cell);
         }
-
-        cell.addEventListener('click', () => damaHandleClick(r, c));
-        fragment.appendChild(cell);
       }
     }
 
-    boardEl.innerHTML = '';
-    boardEl.appendChild(fragment);
+    /* حساب الخلايا المميزة */
+    const validSet = new Set();
+    if (DAMA.selected) {
+      for (const m of damaGetMoves(DAMA.selected.r, DAMA.selected.c, DAMA.board))
+        validSet.add(m.toR * 8 + m.toC);
+    }
+    const lastSet = new Set(DAMA.lastMove.map(lm => lm.r * 8 + lm.c));
 
-    // ✅ استعادة موضع الـ scroll بعد الرسم
-    if (window.scrollY !== savedScrollY) {
-      window.scrollTo({top: savedScrollY, behavior: 'instant'});
+    /* تحديث كل خلية في مكانها بدون إعادة إنشاء */
+    for (let r = 0; r < 8; r++) {
+      for (let c = 0; c < 8; c++) {
+        const idx  = r * 8 + c;
+        const cell = _damaCells[idx];
+
+        let cls = 'dama-cell ' + ((r + c) % 2 === 0 ? 'light' : 'dark');
+        if (lastSet.has(idx))  cls += ' last-move';
+        if (DAMA.selected?.r === r && DAMA.selected?.c === c) cls += ' selected';
+        if (validSet.has(idx)) cls += ' possible-move';
+
+        if (cell.className !== cls) cell.className = cls;
+
+        const piece = DAMA.board[r][c];
+        if (piece) {
+          const pCls = 'dama-piece ' + piece.color + '-piece' + (piece.king ? ' king' : '');
+          const existing = cell.firstElementChild;
+          if (existing?.classList.contains('dama-piece')) {
+            if (existing.className !== pCls) existing.className = pCls;
+          } else {
+            const p = document.createElement('div');
+            p.className = pCls;
+            cell.innerHTML = '';
+            cell.appendChild(p);
+          }
+        } else {
+          if (cell.firstChild) cell.innerHTML = '';
+        }
+      }
     }
   }
 
   function damaUpdateUI() {
-    const redCount  = DAMA.board.flat().filter(p => p && p.color === 'red').length;
-    const blueCount = DAMA.board.flat().filter(p => p && p.color === 'blue').length;
+    const redCount  = DAMA.board.flat().filter(p => p?.color === 'red').length;
+    const blueCount = DAMA.board.flat().filter(p => p?.color === 'blue').length;
     document.getElementById('damaRedCount').textContent  = redCount;
     document.getElementById('damaBlueCount').textContent = blueCount;
     document.getElementById('damaMoveCount').textContent = DAMA.moves;
@@ -114,10 +144,8 @@
     const text = document.getElementById('turnText');
     dot.className  = 'turn-dot ' + DAMA.turn;
     text.textContent = DAMA.turn === 'red' ? 'دور اللاعب الأحمر 🔴' : 'دور اللاعب الأزرق 🔵';
-
-    if (DAMA.aiEnabled && DAMA.turn === DAMA.aiColor) {
+    if (DAMA.aiEnabled && DAMA.turn === DAMA.aiColor)
       text.textContent = '🤖 الذكاء الاصطناعي يفكر...';
-    }
   }
 
   /* --- Click Handler --- */
@@ -157,21 +185,16 @@
     const piece = DAMA.board[move.fromR][move.fromC];
     DAMA.board[move.fromR][move.fromC] = null;
     DAMA.board[move.toR][move.toC] = piece;
-    DAMA.lastMove = [{r: move.fromR, c: move.fromC}, {r: move.toR, c: move.toC}];
+    DAMA.lastMove = [{r:move.fromR, c:move.fromC}, {r:move.toR, c:move.toC}];
 
-    if (move.captureR !== undefined) {
+    if (move.captureR !== undefined)
       DAMA.board[move.captureR][move.captureC] = null;
-    }
-
-    if (!piece.king) {
-      if (piece.color === 'red'  && move.toR === 0) piece.king = true;
-      if (piece.color === 'blue' && move.toR === 7) piece.king = true;
-    }
 
     DAMA.moves++;
-    DAMA.selected = null;
+    DAMA.selected    = null;
     DAMA.mustCapture = [];
 
+    /* ✅ سلسلة الأكل قبل الترقية (القاعدة الصحيحة) */
     if (checkMultiCapture && move.captureR !== undefined) {
       const furtherCaptures = damaGetMoves(move.toR, move.toC, DAMA.board)
         .filter(m => m.captureR !== undefined);
@@ -186,40 +209,47 @@
       }
     }
 
+    /* ✅ الترقية فقط بعد انتهاء الحركة كاملاً */
+    if (!piece.king) {
+      if (piece.color === 'red'  && move.toR === 0) piece.king = true;
+      if (piece.color === 'blue' && move.toR === 7) piece.king = true;
+    }
+
     DAMA.turn = DAMA.turn === 'red' ? 'blue' : 'red';
 
-    const redPieces  = DAMA.board.flat().filter(p => p && p.color === 'red').length;
-    const bluePieces = DAMA.board.flat().filter(p => p && p.color === 'blue').length;
+    const redPieces  = DAMA.board.flat().filter(p => p?.color === 'red').length;
+    const bluePieces = DAMA.board.flat().filter(p => p?.color === 'blue').length;
 
-    if (redPieces === 0)  { damaRender(); damaUpdateUI(); setTimeout(() => showDamaWin('blue'), 400); return; }
+    if (redPieces  === 0) { damaRender(); damaUpdateUI(); setTimeout(() => showDamaWin('blue'), 400); return; }
     if (bluePieces === 0) { damaRender(); damaUpdateUI(); setTimeout(() => showDamaWin('red'),  400); return; }
 
     const allMoves = damaGetAllMoves(DAMA.turn, DAMA.board);
     if (allMoves.length === 0) {
       damaRender(); damaUpdateUI();
-      const winner = DAMA.turn === 'red' ? 'blue' : 'red';
-      setTimeout(() => showDamaWin(winner), 400);
+      setTimeout(() => showDamaWin(DAMA.turn === 'red' ? 'blue' : 'red'), 400);
       return;
     }
 
+    /* تحديد القطع التي يجب عليها الأكل */
     const captures = allMoves.filter(m => m.captureR !== undefined);
     if (captures.length > 0) {
-      const capturePieces = [...new Set(captures.map(m => m.fromR + ',' + m.fromC))]
-        .map(s => ({r: parseInt(s), c: parseInt(s.split(',')[1])}));
-      DAMA.mustCapture = capturePieces;
+      const seen = new Set();
+      DAMA.mustCapture = captures
+        .map(m => ({r:m.fromR, c:m.fromC}))
+        .filter(p => { const k = p.r+','+p.c; if (seen.has(k)) return false; seen.add(k); return true; });
     }
 
     damaRender();
     damaUpdateUI();
 
-    if (DAMA.aiEnabled && DAMA.turn === DAMA.aiColor) scheduleAI(500);
+    if (DAMA.aiEnabled && DAMA.turn === DAMA.aiColor) scheduleAI(600);
   }
 
   /* ============================================================
      قواعد الحركة — الداما المغربية الصحيحة
-     ✅ الجندي: يتحرك للأمام قطرياً فقط
-     ✅ الجندي: يأكل للأمام فقط (لا يأكل للخلف)
-     ✅ الملكة: تتحرك وتأكل في الاتجاهات الأربع
+     ✅ الجندي: يتحرك للأمام قطرياً فقط (اتجاهان)
+     ✅ الجندي: يأكل للأمام قطرياً فقط (اتجاهان)
+     ✅ الملكة: تطير + تأكل في الاتجاهات الأربع
   ============================================================ */
   function damaGetMoves(r, c, board) {
     const piece = board[r][c];
@@ -227,16 +257,15 @@
     const moves = [];
 
     if (piece.king) {
-      // ✅ الملكة: تتحرك وتأكل في 4 اتجاهات قطرية
-      const dirs = [[-1,-1],[-1,1],[1,-1],[1,1]];
-      for (const [dr, dc] of dirs) {
-        let nr = r + dr, nc = c + dc;
+      /* الملكة الطائرة: 4 اتجاهات قطرية */
+      for (const [dr, dc] of [[-1,-1],[-1,1],[1,-1],[1,1]]) {
+        let nr = r+dr, nc = c+dc;
         while (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
           if (!board[nr][nc]) {
             moves.push({fromR:r, fromC:c, toR:nr, toC:nc});
             nr += dr; nc += dc;
           } else if (board[nr][nc].color !== piece.color) {
-            const jr = nr + dr, jc = nc + dc;
+            const jr = nr+dr, jc = nc+dc;
             if (jr >= 0 && jr < 8 && jc >= 0 && jc < 8 && !board[jr][jc]) {
               let lr = jr, lc = jc;
               while (lr >= 0 && lr < 8 && lc >= 0 && lc < 8 && !board[lr][lc]) {
@@ -245,33 +274,29 @@
               }
             }
             break;
-          } else {
-            break;
-          }
+          } else { break; }
         }
       }
     } else {
-      // ✅ الجندي: الأحمر يتقدم للأعلى، الأزرق للأسفل
-      const forward = piece.color === 'red' ? -1 : 1;
+      /* ✅ الجندي: للأمام فقط — الأحمر يصعد (-1)، الأزرق ينزل (+1) */
+      const fwd = piece.color === 'red' ? -1 : 1;
 
-      // الحركة العادية للأمام فقط (اتجاهان قطريان)
+      /* حركة عادية للأمام: اتجاهان فقط */
       for (const dc of [-1, 1]) {
-        const nr = r + forward, nc = c + dc;
-        if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8 && !board[nr][nc]) {
+        const nr = r + fwd, nc = c + dc;
+        if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8 && !board[nr][nc])
           moves.push({fromR:r, fromC:c, toR:nr, toC:nc});
-        }
       }
 
-      // ✅ الأكل للأمام فقط (إصلاح: لا يأكل للخلف)
+      /* ✅ الأكل للأمام فقط (القاعدة المغربية الصحيحة) */
       for (const dc of [-1, 1]) {
-        const nr = r + forward,   nc = c + dc;
-        const jr = r + 2*forward, jc = c + 2*dc;
-        if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8 &&
-            jr >= 0 && jr < 8 && jc >= 0 && jc < 8 &&
-            board[nr][nc] && board[nr][nc].color !== piece.color &&
-            !board[jr][jc]) {
-          moves.push({fromR:r, fromC:c, toR:jr, toC:jc, captureR:nr, captureC:nc});
-        }
+        const er = r + fwd,    ec = c + dc;     /* موقع القطعة المأكولة */
+        const lr = r + 2*fwd,  lc = c + 2*dc;   /* موقع الهبوط */
+        if (er >= 0 && er < 8 && ec >= 0 && ec < 8 &&
+            lr >= 0 && lr < 8 && lc >= 0 && lc < 8 &&
+            board[er][ec] && board[er][ec].color !== piece.color &&
+            !board[lr][lc])
+          moves.push({fromR:r, fromC:c, toR:lr, toC:lc, captureR:er, captureC:ec});
       }
     }
 
@@ -282,7 +307,7 @@
     const all = [];
     for (let r = 0; r < 8; r++)
       for (let c = 0; c < 8; c++)
-        if (board[r][c] && board[r][c].color === color)
+        if (board[r][c]?.color === color)
           all.push(...damaGetMoves(r, c, board));
     const captures = all.filter(m => m.captureR !== undefined);
     return captures.length > 0 ? captures : all;
@@ -292,6 +317,7 @@
   function damaUndoMove() {
     if (DAMA.history.length === 0) return;
     clearTimeout(DAMA.aiTimer);
+    if (DAMA.aiWorker) { DAMA.aiWorker.terminate(); DAMA.aiWorker = null; }
     const prev = DAMA.history.pop();
     DAMA.board       = prev.board;
     DAMA.turn        = prev.turn;
@@ -321,8 +347,183 @@
   }
 
   /* ============================================================
-     AI — Minimax + Alpha-Beta + Eval محسّن
+     AI — Web Worker حقيقي (لا يجمّد الواجهة أبداً)
+     Minimax + Alpha-Beta + عمق 7 + ترتيب ذكي للحركات
   ============================================================ */
+
+  /* كود الـ Worker كاملاً — يُحقن كـ Blob */
+  const _WORKER_CODE = `
+    'use strict';
+
+    function copyBoard(b) {
+      return b.map(row => row.map(p => p ? {color:p.color, king:p.king} : null));
+    }
+
+    function getMoves(r, c, board) {
+      const piece = board[r][c];
+      if (!piece) return [];
+      const moves = [];
+      if (piece.king) {
+        for (const [dr, dc] of [[-1,-1],[-1,1],[1,-1],[1,1]]) {
+          let nr = r+dr, nc = c+dc;
+          while (nr>=0&&nr<8&&nc>=0&&nc<8) {
+            if (!board[nr][nc]) {
+              moves.push({fromR:r,fromC:c,toR:nr,toC:nc});
+              nr+=dr; nc+=dc;
+            } else if (board[nr][nc].color !== piece.color) {
+              const jr=nr+dr, jc=nc+dc;
+              if (jr>=0&&jr<8&&jc>=0&&jc<8&&!board[jr][jc]) {
+                let lr=jr, lc=jc;
+                while (lr>=0&&lr<8&&lc>=0&&lc<8&&!board[lr][lc]) {
+                  moves.push({fromR:r,fromC:c,toR:lr,toC:lc,captureR:nr,captureC:nc});
+                  lr+=dr; lc+=dc;
+                }
+              }
+              break;
+            } else { break; }
+          }
+        }
+      } else {
+        const fwd = piece.color==='red' ? -1 : 1;
+        for (const dc of [-1,1]) {
+          const nr=r+fwd, nc=c+dc;
+          if (nr>=0&&nr<8&&nc>=0&&nc<8&&!board[nr][nc])
+            moves.push({fromR:r,fromC:c,toR:nr,toC:nc});
+        }
+        for (const dc of [-1,1]) {
+          const er=r+fwd, ec=c+dc, lr=r+2*fwd, lc=c+2*dc;
+          if (er>=0&&er<8&&ec>=0&&ec<8&&lr>=0&&lr<8&&lc>=0&&lc<8&&
+              board[er][ec]&&board[er][ec].color!==piece.color&&!board[lr][lc])
+            moves.push({fromR:r,fromC:c,toR:lr,toC:lc,captureR:er,captureC:ec});
+        }
+      }
+      return moves;
+    }
+
+    function getAllMoves(color, board) {
+      const all = [];
+      for (let r=0;r<8;r++)
+        for (let c=0;c<8;c++)
+          if (board[r][c]?.color===color) all.push(...getMoves(r,c,board));
+      const caps = all.filter(m=>m.captureR!==undefined);
+      return caps.length>0 ? caps : all;
+    }
+
+    function applyMove(move, board) {
+      const piece = board[move.fromR][move.fromC];
+      board[move.fromR][move.fromC] = null;
+      board[move.toR][move.toC] = piece;
+      if (move.captureR!==undefined) board[move.captureR][move.captureC]=null;
+      if (piece&&!piece.king) {
+        if (piece.color==='red'  && move.toR===0) piece.king=true;
+        if (piece.color==='blue' && move.toR===7) piece.king=true;
+      }
+      return board;
+    }
+
+    /* --- تقييم محسّن --- */
+    function evalBoard(board, aiColor) {
+      const opp = aiColor==='blue'?'red':'blue';
+      let score=0, aiK=0, oppK=0;
+
+      /* جداول موضعية للجندي (كلما اقترب من الترقية كان أفضل) */
+      const advTable = {red: [0,1,2,3,4,5,6,7], blue:[7,6,5,4,3,2,1,0]};
+
+      for (let r=0;r<8;r++) for (let c=0;c<8;c++) {
+        const p=board[r][c]; if(!p) continue;
+        const isAI=p.color===aiColor, s=isAI?1:-1;
+        if (p.king) {
+          score += s*5;
+          isAI?aiK++:oppK++;
+          const cd = Math.abs(r-3.5)+Math.abs(c-3.5);
+          score += s*(7-cd)*0.25;
+        } else {
+          score += s*1;
+          score += s * advTable[p.color][r] * 0.12;
+          const back = p.color==='red'?7:0;
+          if (r===back) score+=s*0.5;
+          if (c===0||c===7) score+=s*0.25;
+          if (c>=2&&c<=5) score+=s*0.15;
+          /* قطع محمية (بجانبها قطعة من نفس اللون) */
+          for (const [dr,dc] of [[1,-1],[1,1],[-1,-1],[-1,1]]) {
+            const nr=r+dr,nc=c+dc;
+            if (nr>=0&&nr<8&&nc>=0&&nc<8&&board[nr][nc]?.color===p.color)
+              score+=s*0.1;
+          }
+        }
+      }
+
+      /* الحركية + فارق الملكات */
+      score += (getAllMoves(aiColor,board).length - getAllMoves(opp,board).length)*0.1;
+      score += (aiK-oppK)*0.6;
+
+      return score;
+    }
+
+    /* --- Minimax Alpha-Beta --- */
+    function minimax(board, turn, depth, alpha, beta, aiColor) {
+      const flat=board.flat();
+      const rN=flat.filter(p=>p?.color==='red').length;
+      const bN=flat.filter(p=>p?.color==='blue').length;
+      if (rN===0) return aiColor==='blue'? 5000:-5000;
+      if (bN===0) return aiColor==='red' ? 5000:-5000;
+      if (depth===0) return evalBoard(board, aiColor);
+
+      const moves=getAllMoves(turn, board);
+      if (moves.length===0) return turn===aiColor?-4000:4000;
+
+      /* الأكل أولاً + خلط الحركات المتساوية لتنويع الأسلوب */
+      moves.sort((a,b)=>{
+        const ac=a.captureR!==undefined?1:0, bc=b.captureR!==undefined?1:0;
+        return bc-ac || Math.random()-0.5;
+      });
+
+      const next=turn==='red'?'blue':'red';
+      const isMax=turn===aiColor;
+
+      if (isMax) {
+        let best=-Infinity;
+        for (const m of moves) {
+          const e=minimax(applyMove(m,copyBoard(board)),next,depth-1,alpha,beta,aiColor);
+          if(e>best) best=e;
+          if(e>alpha) alpha=e;
+          if(beta<=alpha) break;
+        }
+        return best;
+      } else {
+        let best=Infinity;
+        for (const m of moves) {
+          const e=minimax(applyMove(m,copyBoard(board)),next,depth-1,alpha,beta,aiColor);
+          if(e<best) best=e;
+          if(e<beta) beta=e;
+          if(beta<=alpha) break;
+        }
+        return best;
+      }
+    }
+
+    self.onmessage = function(e) {
+      const {board, aiColor, depth} = e.data;
+      const moves = getAllMoves(aiColor, board);
+      if (!moves.length) { self.postMessage(null); return; }
+
+      /* ترتيب أولي: أكل أولاً */
+      moves.sort((a,b)=>(b.captureR!==undefined?1:0)-(a.captureR!==undefined?1:0));
+
+      const opp = aiColor==='blue'?'red':'blue';
+      let bestMove=null, bestScore=-Infinity;
+
+      for (const move of moves) {
+        const nb=applyMove(move, copyBoard(board));
+        const score=minimax(nb, opp, depth-1, -Infinity, Infinity, aiColor);
+        if (score>bestScore) { bestScore=score; bestMove=move; }
+      }
+
+      self.postMessage(bestMove);
+    };
+  `;
+
+  /* --- Toggle AI --- */
   function toggleDamaAI() {
     DAMA.aiEnabled = !DAMA.aiEnabled;
     const btn   = document.getElementById('damaAiToggle');
@@ -331,152 +532,55 @@
     btn.classList.toggle('btn-solver', !DAMA.aiEnabled);
     badge.classList.toggle('visible', DAMA.aiEnabled);
 
-    if (DAMA.aiEnabled && DAMA.turn === DAMA.aiColor) scheduleAI(500);
-    if (!DAMA.aiEnabled) { clearTimeout(DAMA.aiTimer); badge.classList.remove('visible'); }
+    if (!DAMA.aiEnabled) {
+      clearTimeout(DAMA.aiTimer);
+      if (DAMA.aiWorker) { DAMA.aiWorker.terminate(); DAMA.aiWorker = null; }
+      badge.classList.remove('visible');
+    } else if (DAMA.turn === DAMA.aiColor) {
+      scheduleAI(500);
+    }
   }
 
-  function scheduleAI(delay = 500) {
+  /* --- Schedule + Run AI (في Web Worker منفصل) --- */
+  function scheduleAI(delay = 600) {
     clearTimeout(DAMA.aiTimer);
     document.getElementById('damaAiBadge').classList.add('visible');
-    DAMA.aiTimer = setTimeout(() => {
-      // ✅ نشغّل الحساب خارج الـ main thread بشكل وهمي عبر setTimeout=0
-      // لمنع تجميد الواجهة أثناء التفكير
-      setTimeout(() => {
-        const move = damaPickAIMove();
-        document.getElementById('damaAiBadge').classList.remove('visible');
-        if (move) damaExecuteMove(move, true);
-      }, 0);
-    }, delay);
+    DAMA.aiTimer = setTimeout(() => _runAIWorker(), delay);
   }
 
-  function damaPickAIMove() {
-    const allMoves = damaGetAllMoves(DAMA.aiColor, DAMA.board);
-    if (allMoves.length === 0) return null;
+  function _runAIWorker() {
+    if (!DAMA.aiEnabled || DAMA.turn !== DAMA.aiColor) return;
 
-    // ✅ ترتيب الحركات: الأكل أولاً لتحسين alpha-beta pruning
-    allMoves.sort((a, b) =>
-      (b.captureR !== undefined ? 1 : 0) - (a.captureR !== undefined ? 1 : 0)
-    );
+    /* إنهاء worker قديم */
+    if (DAMA.aiWorker) { DAMA.aiWorker.terminate(); DAMA.aiWorker = null; }
 
-    let bestMove = null, bestScore = -Infinity;
-    const depth = 6; // ✅ عمق أعمق من 4 → 6
-    const oppColor = DAMA.aiColor === 'blue' ? 'red' : 'blue';
+    /* إنشاء Worker من Blob (لا يحتاج ملف خارجي) */
+    const blob = new Blob([_WORKER_CODE], {type:'application/javascript'});
+    const url  = URL.createObjectURL(blob);
+    DAMA.aiWorker = new Worker(url);
+    URL.revokeObjectURL(url);
 
-    for (const move of allMoves) {
-      const newBoard = applyMoveToBoard(move, copyBoard(DAMA.board));
-      const score = minimax(newBoard, oppColor, depth - 1, -Infinity, Infinity);
-      if (score > bestScore) { bestScore = score; bestMove = move; }
-    }
-    return bestMove;
-  }
+    /* عمق أعمق كلما قلّت القطع */
+    const pieces = DAMA.board.flat().filter(p=>p).length;
+    const depth  = pieces > 18 ? 6 : pieces > 10 ? 7 : 8;
 
-  function minimax(board, currentTurn, depth, alpha, beta) {
-    const aiColor  = DAMA.aiColor;
-    const oppColor = aiColor === 'blue' ? 'red' : 'blue';
-    const maximizing = currentTurn === aiColor;
+    DAMA.aiWorker.onmessage = function(ev) {
+      DAMA.aiWorker = null;
+      document.getElementById('damaAiBadge').classList.remove('visible');
+      if (!DAMA.aiEnabled) return;
+      const move = ev.data;
+      if (move) damaExecuteMove(move, true);
+    };
 
-    // شروط التوقف
-    const redCount  = board.flat().filter(p => p && p.color === 'red').length;
-    const blueCount = board.flat().filter(p => p && p.color === 'blue').length;
-    if (redCount  === 0) return aiColor === 'blue' ?  2000 : -2000;
-    if (blueCount === 0) return aiColor === 'red'  ?  2000 : -2000;
-    if (depth === 0) return damaEval(board, aiColor);
+    DAMA.aiWorker.onerror = function(err) {
+      console.error('AI Worker error:', err);
+      DAMA.aiWorker = null;
+      document.getElementById('damaAiBadge').classList.remove('visible');
+    };
 
-    const moves = damaGetAllMoves(currentTurn, board);
-    if (moves.length === 0) return maximizing ? -1800 : 1800;
-
-    // ✅ ترتيب الحركات في كل مستوى (الأكل أولاً)
-    moves.sort((a, b) =>
-      (b.captureR !== undefined ? 1 : 0) - (a.captureR !== undefined ? 1 : 0)
-    );
-
-    const nextTurn = currentTurn === 'red' ? 'blue' : 'red';
-
-    if (maximizing) {
-      let maxEval = -Infinity;
-      for (const m of moves) {
-        const nb = applyMoveToBoard(m, copyBoard(board));
-        const e  = minimax(nb, nextTurn, depth - 1, alpha, beta);
-        if (e > maxEval) maxEval = e;
-        if (e > alpha)   alpha   = e;
-        if (beta <= alpha) break; // ✂️ تقليم
-      }
-      return maxEval;
-    } else {
-      let minEval = Infinity;
-      for (const m of moves) {
-        const nb = applyMoveToBoard(m, copyBoard(board));
-        const e  = minimax(nb, nextTurn, depth - 1, alpha, beta);
-        if (e < minEval) minEval = e;
-        if (e < beta)    beta    = e;
-        if (beta <= alpha) break; // ✂️ تقليم
-      }
-      return minEval;
-    }
-  }
-
-  /* ============================================================
-     دالة التقييم المحسّنة
-  ============================================================ */
-  function damaEval(board, aiColor) {
-    const oppColor = aiColor === 'blue' ? 'red' : 'blue';
-    let score = 0;
-
-    let aiPieces = 0, oppPieces = 0;
-    let aiKings  = 0, oppKings  = 0;
-
-    for (let r = 0; r < 8; r++) {
-      for (let c = 0; c < 8; c++) {
-        const p = board[r][c];
-        if (!p) continue;
-        const isAI = p.color === aiColor;
-        const sign = isAI ? 1 : -1;
-
-        if (p.king) {
-          // ✅ الملكة تساوي 4 جنود
-          score += sign * 4;
-          isAI ? aiKings++ : oppKings++;
-
-          // ✅ الملكة في المركز أفضل
-          const centerDist = Math.abs(r - 3.5) + Math.abs(c - 3.5);
-          score += sign * (7 - centerDist) * 0.15;
-        } else {
-          score += sign * 1;
-          isAI ? aiPieces++ : oppPieces++;
-
-          // ✅ التقدم للأمام (الاقتراب من التتويج)
-          const adv = p.color === 'red' ? (7 - r) : r;
-          score += sign * adv * 0.07;
-
-          // ✅ الدفاع: إبقاء قطع الصف الخلفي كدرع
-          const backRow = p.color === 'red' ? 7 : 0;
-          if (r === backRow) score += sign * 0.4;
-
-          // ✅ الجانبان يحتاجان حماية أيضاً
-          if (c === 0 || c === 7) score += sign * 0.2;
-        }
-      }
-    }
-
-    // ✅ مكافأة الحركية (كثرة الخيارات ميزة)
-    const aiMobility  = damaGetAllMoves(aiColor,  board).length;
-    const oppMobility = damaGetAllMoves(oppColor, board).length;
-    score += (aiMobility - oppMobility) * 0.08;
-
-    // ✅ مكافأة على وجود ملكات
-    score += (aiKings - oppKings) * 0.5;
-
-    return score;
-  }
-
-  function applyMoveToBoard(move, board) {
-    const piece = board[move.fromR][move.fromC];
-    board[move.fromR][move.fromC] = null;
-    board[move.toR][move.toC] = piece;
-    if (move.captureR !== undefined) board[move.captureR][move.captureC] = null;
-    if (piece && !piece.king) {
-      if (piece.color === 'red'  && move.toR === 0) piece.king = true;
-      if (piece.color === 'blue' && move.toR === 7) piece.king = true;
-    }
-    return board;
+    DAMA.aiWorker.postMessage({
+      board: copyBoard(DAMA.board),
+      aiColor: DAMA.aiColor,
+      depth
+    });
   }
