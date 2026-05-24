@@ -1,0 +1,199 @@
+/* ============================================================
+   LAYOUT — WRAPPER, HEADER, GAME SELECTOR, FOOTER, RESPONSIVE, LOADING, INSTALL BANNER
+   ============================================================ */
+
+    /* ============================================================
+       LAYOUT WRAPPER
+    ============================================================ */
+    .app-wrapper {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      max-width: 480px;
+      min-height: 100dvh;
+      padding: 20px 16px 32px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 18px;
+    }
+
+    /* ============================================================
+       HEADER
+    ============================================================ */
+    .header {
+      width: 100%;
+      text-align: center;
+    }
+
+    .header-title {
+      font-family: 'Syne', sans-serif;
+      font-size: clamp(1.8rem, 7vw, 2.4rem);
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      background: linear-gradient(135deg, var(--accent-gold) 0%, var(--accent-cyan) 60%, var(--accent-violet) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      line-height: 1.1;
+    }
+
+    .header-subtitle {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-top: 4px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+
+
+    /* ============================================================
+       INSTALL BANNER
+    ============================================================ */
+    .install-banner {
+      width: 100%;
+      background: linear-gradient(135deg, rgba(168,85,247,0.15), rgba(0,212,255,0.1));
+      border: 1px solid rgba(168,85,247,0.25);
+      border-radius: var(--radius-card);
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      display: none;
+    }
+
+    .install-banner.visible {
+      display: flex;
+    }
+
+    .install-banner-text {
+      flex: 1;
+      font-size: 0.82rem;
+      color: var(--text-primary);
+      line-height: 1.4;
+    }
+
+    .install-banner-text strong {
+      color: var(--accent-cyan);
+    }
+
+    .btn-install {
+      background: linear-gradient(135deg, var(--accent-violet), var(--accent-cyan));
+      color: #fff;
+      border: none;
+      border-radius: 50px;
+      padding: 8px 16px;
+      font-family: 'Cairo', sans-serif;
+      font-size: 0.78rem;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+      box-shadow: 0 2px 10px rgba(168,85,247,0.3);
+    }
+
+    /* ============================================================
+       FOOTER
+    ============================================================ */
+    .footer {
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 0.7rem;
+      letter-spacing: 1px;
+      opacity: 0.6;
+    }
+
+    /* ============================================================
+       RESPONSIVE
+    ============================================================ */
+    @media (min-width: 480px) {
+      .app-wrapper {
+        padding: 28px 24px 40px;
+        gap: 20px;
+      }
+
+      .board-container {
+        max-width: 400px;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .tile {
+        transition: none !important;
+      }
+    }
+
+
+    /* ============================================================
+       LOADING SCREEN
+    ============================================================ */
+    .loading-screen {
+      position: fixed;
+      inset: 0;
+      background: var(--bg-deep);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+      transition: opacity 500ms ease;
+    }
+
+    .loading-screen.hidden {
+      opacity: 0;
+      display: none !important;
+      pointer-events: none;
+    }
+
+    .loader-ring {
+      width: 56px;
+      height: 56px;
+      border: 3px solid rgba(255,255,255,0.05);
+      border-top-color: var(--accent-violet);
+      border-right-color: var(--accent-cyan);
+      border-radius: 50%;
+      animation: spin 800ms linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+
+    /* ============================================================
+       GAME SELECTOR — TOP TABS
+    ============================================================ */
+    .game-selector {
+      width: 100%;
+      display: flex;
+      gap: 6px;
+      background: rgba(0,0,0,0.3);
+      border-radius: 50px;
+      padding: 5px;
+      border: 1px solid rgba(255,255,255,0.08);
+      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    }
+
+    .game-tab {
+      flex: 1;
+      padding: 10px 8px;
+      border-radius: 50px;
+      border: none;
+      cursor: pointer;
+      font-family: 'Cairo', sans-serif;
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      background: transparent;
+      transition: all 220ms ease;
+      white-space: nowrap;
+      letter-spacing: 0.3px;
+    }
+
+    .game-tab.active {
+      background: linear-gradient(135deg, #f5c842, #ff8c00);
+      color: #1a0a00;
+      box-shadow: 0 2px 14px rgba(245,200,66,0.45);
+    }
+
+    .game-tab:hover:not(.active) {
+      color: var(--text-primary);
+    }
