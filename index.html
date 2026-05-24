@@ -1,0 +1,1358 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#1a1a2e" />
+  <meta name="description" content="لعبة اللغز المنزلق - Sliding Puzzle PWA" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Puzzle" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <title>🧩 Sliding Puzzle</title>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=Cairo:wght@400;600;700&display=swap" rel="stylesheet" />
+
+  <style>
+    /* ============================================================
+       DESIGN SYSTEM — VARIABLES
+    ============================================================ */
+    :root {
+      --bg-deep:        #0d0d1a;
+      --bg-surface:     #12122a;
+      --bg-card:        #1a1a3a;
+      --bg-tile:        #1e2050;
+      --tile-face:      #252868;
+      --tile-shadow-d:  #0a0a1c;
+      --tile-shadow-l:  #2e3480;
+      --accent-gold:    #f5c842;
+      --accent-cyan:    #00d4ff;
+      --accent-violet:  #a855f7;
+      --text-primary:   #e8e8ff;
+      --text-muted:     #6b6b9a;
+      --text-tile:      #ffffff;
+      --success:        #22c55e;
+      --danger:         #ef4444;
+      --radius-tile:    14px;
+      --radius-card:    20px;
+      --gap:            10px;
+      --tile-size:      min(calc((90vw - 40px) / 3), 140px);
+      --transition-tile: 220ms cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    /* ============================================================
+       RESET & BASE
+    ============================================================ */
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      height: 100%;
+      overscroll-behavior: none;
+    }
+
+    body {
+      font-family: 'Cairo', 'Syne', sans-serif;
+      background: var(--bg-deep);
+      color: var(--text-primary);
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      overflow-x: hidden;
+    }
+
+    /* ============================================================
+       ANIMATED BACKGROUND
+    ============================================================ */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 80% 60% at 20% 10%, rgba(168, 85, 247, 0.12) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 80% at 80% 90%, rgba(0, 212, 255, 0.10) 0%, transparent 60%),
+        radial-gradient(ellipse 100% 100% at 50% 50%, rgba(26, 26, 58, 0.8) 0%, var(--bg-deep) 100%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ============================================================
+       LAYOUT WRAPPER
+    ============================================================ */
+    .app-wrapper {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      max-width: 480px;
+      min-height: 100dvh;
+      padding: 20px 16px 32px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 18px;
+    }
+
+    /* ============================================================
+       HEADER
+    ============================================================ */
+    .header {
+      width: 100%;
+      text-align: center;
+    }
+
+    .header-title {
+      font-family: 'Syne', sans-serif;
+      font-size: clamp(1.8rem, 7vw, 2.4rem);
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      background: linear-gradient(135deg, var(--accent-gold) 0%, var(--accent-cyan) 60%, var(--accent-violet) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      line-height: 1.1;
+    }
+
+    .header-subtitle {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-top: 4px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+
+    /* ============================================================
+       MODE SWITCHER
+    ============================================================ */
+    .mode-switcher {
+      display: flex;
+      gap: 8px;
+      background: var(--bg-card);
+      border-radius: 50px;
+      padding: 5px;
+      border: 1px solid rgba(255,255,255,0.06);
+      box-shadow:
+        0 4px 20px rgba(0,0,0,0.4),
+        inset 0 1px 0 rgba(255,255,255,0.05);
+    }
+
+    .mode-btn {
+      padding: 8px 18px;
+      border-radius: 50px;
+      border: none;
+      cursor: pointer;
+      font-family: 'Cairo', sans-serif;
+      font-size: 0.82rem;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      background: transparent;
+      transition: all 200ms ease;
+      white-space: nowrap;
+    }
+
+    .mode-btn.active {
+      background: linear-gradient(135deg, var(--accent-violet), var(--accent-cyan));
+      color: #fff;
+      box-shadow: 0 2px 12px rgba(168, 85, 247, 0.4);
+    }
+
+    .mode-btn:hover:not(.active) {
+      color: var(--text-primary);
+    }
+
+    /* ============================================================
+       STATS BAR
+    ============================================================ */
+    .stats-bar {
+      width: 100%;
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 10px;
+    }
+
+    .stat-card {
+      background: var(--bg-card);
+      border-radius: var(--radius-card);
+      padding: 12px 10px;
+      text-align: center;
+      border: 1px solid rgba(255,255,255,0.05);
+      box-shadow:
+        0 4px 16px rgba(0,0,0,0.3),
+        inset 0 1px 0 rgba(255,255,255,0.06);
+    }
+
+    .stat-label {
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+
+    .stat-value {
+      font-family: 'Syne', sans-serif;
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      line-height: 1;
+    }
+
+    .stat-value.highlight {
+      background: linear-gradient(135deg, var(--accent-gold), #ff9f43);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    /* ============================================================
+       GAME BOARD CONTAINER
+    ============================================================ */
+    .board-container {
+      width: 100%;
+      aspect-ratio: 1;
+      max-width: min(90vw, 440px);
+      position: relative;
+    }
+
+    /* Decorative glow ring */
+    .board-container::before {
+      content: '';
+      position: absolute;
+      inset: -3px;
+      border-radius: calc(var(--radius-card) + 4px);
+      background: linear-gradient(135deg, var(--accent-violet), var(--accent-cyan), var(--accent-gold));
+      opacity: 0.25;
+      filter: blur(8px);
+      z-index: -1;
+      transition: opacity 400ms ease;
+    }
+
+    .board-container.winning::before {
+      opacity: 0.8;
+      animation: pulse-ring 1s ease infinite;
+    }
+
+    @keyframes pulse-ring {
+      0%, 100% { opacity: 0.8; transform: scale(1); }
+      50%       { opacity: 0.5; transform: scale(1.02); }
+    }
+
+    /* ============================================================
+       GAME BOARD (GRID)
+    ============================================================ */
+    .board {
+      width: 100%;
+      height: 100%;
+      background: var(--bg-card);
+      border-radius: var(--radius-card);
+      border: 1px solid rgba(255,255,255,0.06);
+      box-shadow:
+        0 20px 60px rgba(0,0,0,0.6),
+        inset 0 1px 0 rgba(255,255,255,0.06),
+        inset 0 -1px 0 rgba(0,0,0,0.4);
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      grid-template-rows: repeat(3, 1fr);
+      gap: var(--gap);
+      padding: var(--gap);
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* ============================================================
+       TILES
+    ============================================================ */
+    .tile {
+      border-radius: var(--radius-tile);
+      cursor: pointer;
+      position: relative;
+      transition:
+        transform var(--transition-tile),
+        box-shadow 200ms ease;
+      user-select: none;
+      overflow: hidden;
+      will-change: transform;
+    }
+
+    /* Numbers & Letters tile styling */
+    .tile[data-mode="numbers"],
+    .tile[data-mode="letters"] {
+      background: linear-gradient(145deg, var(--tile-shadow-l), var(--tile-face));
+      box-shadow:
+        4px 4px 12px var(--tile-shadow-d),
+        -2px -2px 8px rgba(255,255,255,0.04),
+        inset 0 1px 0 rgba(255,255,255,0.12),
+        inset 0 -1px 0 rgba(0,0,0,0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* The raised face highlight */
+    .tile[data-mode="numbers"]::before,
+    .tile[data-mode="letters"]::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      background: linear-gradient(145deg,
+        rgba(255,255,255,0.12) 0%,
+        rgba(255,255,255,0.02) 40%,
+        transparent 100%);
+      pointer-events: none;
+    }
+
+    /* Bottom-edge depth shadow */
+    .tile[data-mode="numbers"]::after,
+    .tile[data-mode="letters"]::after {
+      content: '';
+      position: absolute;
+      bottom: 0; left: 6px; right: 6px;
+      height: 3px;
+      border-radius: 0 0 4px 4px;
+      background: rgba(0,0,0,0.5);
+      filter: blur(2px);
+    }
+
+    .tile-number {
+      font-family: 'Syne', sans-serif;
+      font-size: clamp(1.6rem, 5vw, 2.2rem);
+      font-weight: 800;
+      color: var(--text-tile);
+      text-shadow:
+        0 2px 6px rgba(0,0,0,0.5),
+        0 1px 0 rgba(255,255,255,0.15);
+      letter-spacing: -1px;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* Hover state */
+    .tile:hover:not(.empty) {
+      transform: translateY(-2px) scale(1.03);
+      box-shadow:
+        6px 8px 20px var(--tile-shadow-d),
+        -2px -2px 8px rgba(255,255,255,0.06),
+        inset 0 1px 0 rgba(255,255,255,0.15),
+        inset 0 -1px 0 rgba(0,0,0,0.3);
+    }
+
+    /* Active (press) state */
+    .tile:active:not(.empty) {
+      transform: translateY(1px) scale(0.97);
+      box-shadow:
+        2px 2px 8px var(--tile-shadow-d),
+        inset 0 2px 4px rgba(0,0,0,0.4);
+      transition-duration: 80ms;
+    }
+
+    /* Sliding animation state */
+    .tile.sliding {
+      z-index: 10;
+      animation: tile-slide-bump 220ms cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    @keyframes tile-slide-bump {
+      0%   { transform: scale(1); }
+      40%  { transform: scale(1.06) translateY(-3px); }
+      100% { transform: scale(1); }
+    }
+
+    /* Empty cell */
+    .tile.empty {
+      background: rgba(0,0,0,0.25);
+      box-shadow:
+        inset 3px 3px 10px rgba(0,0,0,0.5),
+        inset -1px -1px 4px rgba(255,255,255,0.02);
+      cursor: default;
+      border-radius: var(--radius-tile);
+    }
+
+    /* Win highlight on tiles */
+    .tile.win-tile {
+      animation: win-glow 600ms ease forwards;
+    }
+
+    @keyframes win-glow {
+      0%   { box-shadow: 4px 4px 12px var(--tile-shadow-d), -2px -2px 8px rgba(255,255,255,0.04); }
+      50%  { box-shadow: 0 0 30px rgba(245, 200, 66, 0.6), 0 0 60px rgba(0,212,255,0.3); }
+      100% { box-shadow: 0 0 20px rgba(34,197,94,0.5), inset 0 0 10px rgba(34,197,94,0.1); }
+    }
+
+    /* ============================================================
+       TILE NUMBER COLORS (gradient per number)
+    ============================================================ */
+    .tile[data-value="1"] .tile-number { color: #60a5fa; }
+    .tile[data-value="2"] .tile-number { color: #a78bfa; }
+    .tile[data-value="3"] .tile-number { color: #f472b6; }
+    .tile[data-value="4"] .tile-number { color: #fb923c; }
+    .tile[data-value="5"] .tile-number { color: #facc15; }
+    .tile[data-value="6"] .tile-number { color: #34d399; }
+    .tile[data-value="7"] .tile-number { color: #22d3ee; }
+    .tile[data-value="8"] .tile-number { color: #f87171; }
+
+    /* ============================================================
+       ACTION BUTTONS
+    ============================================================ */
+    .actions {
+      display: flex;
+      gap: 10px;
+      width: 100%;
+    }
+
+    .btn {
+      flex: 1;
+      padding: 14px 12px;
+      border: none;
+      border-radius: 50px;
+      cursor: pointer;
+      font-family: 'Cairo', sans-serif;
+      font-size: 0.88rem;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      transition: all 180ms ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .btn::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, rgba(255,255,255,0.12) 0%, transparent 50%);
+      border-radius: inherit;
+      pointer-events: none;
+    }
+
+    .btn:active {
+      transform: scale(0.96);
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent-violet) 0%, #7c3aed 100%);
+      color: #fff;
+      box-shadow:
+        0 4px 20px rgba(168, 85, 247, 0.4),
+        inset 0 1px 0 rgba(255,255,255,0.2);
+    }
+
+    .btn-primary:hover {
+      background: linear-gradient(135deg, #b46ef9 0%, #8b5cf6 100%);
+      box-shadow: 0 6px 24px rgba(168, 85, 247, 0.5);
+      transform: translateY(-1px);
+    }
+
+    .btn-secondary {
+      background: var(--bg-card);
+      color: var(--text-primary);
+      border: 1px solid rgba(255,255,255,0.08);
+      box-shadow:
+        0 4px 16px rgba(0,0,0,0.3),
+        inset 0 1px 0 rgba(255,255,255,0.06);
+    }
+
+    .btn-secondary:hover {
+      background: var(--bg-tile);
+      border-color: rgba(255,255,255,0.12);
+      transform: translateY(-1px);
+    }
+
+    /* ============================================================
+       HIGH SCORE PANEL
+    ============================================================ */
+    .highscore-panel {
+      width: 100%;
+      background: var(--bg-card);
+      border-radius: var(--radius-card);
+      padding: 14px 18px;
+      border: 1px solid rgba(255,255,255,0.05);
+      box-shadow:
+        0 4px 16px rgba(0,0,0,0.3),
+        inset 0 1px 0 rgba(255,255,255,0.05);
+    }
+
+    .highscore-title {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .highscore-title::before {
+      content: '🏆';
+      font-size: 0.85rem;
+    }
+
+    .highscore-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .hs-item {
+      text-align: center;
+    }
+
+    .hs-label {
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+
+    .hs-value {
+      font-family: 'Syne', sans-serif;
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--accent-gold);
+    }
+
+    /* ============================================================
+       WIN OVERLAY
+    ============================================================ */
+    .win-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(10, 10, 26, 0.88);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 400ms ease, visibility 400ms ease;
+    }
+
+    .win-overlay.visible {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .win-card {
+      background: var(--bg-card);
+      border-radius: 28px;
+      padding: 36px 32px;
+      text-align: center;
+      max-width: 320px;
+      width: 90%;
+      border: 1px solid rgba(255,255,255,0.08);
+      box-shadow:
+        0 30px 80px rgba(0,0,0,0.8),
+        0 0 60px rgba(168,85,247,0.2),
+        inset 0 1px 0 rgba(255,255,255,0.08);
+      transform: scale(0.8) translateY(20px);
+      transition: transform 400ms cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .win-overlay.visible .win-card {
+      transform: scale(1) translateY(0);
+    }
+
+    .win-emoji {
+      font-size: 4rem;
+      line-height: 1;
+      margin-bottom: 12px;
+      animation: bounce-emoji 600ms cubic-bezier(0.34, 1.56, 0.64, 1) 200ms both;
+    }
+
+    @keyframes bounce-emoji {
+      from { transform: scale(0) rotate(-10deg); }
+      to   { transform: scale(1) rotate(0deg); }
+    }
+
+    .win-title {
+      font-family: 'Syne', sans-serif;
+      font-size: 1.8rem;
+      font-weight: 800;
+      background: linear-gradient(135deg, var(--accent-gold), var(--accent-cyan));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 6px;
+    }
+
+    .win-subtitle {
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      margin-bottom: 24px;
+    }
+
+    .win-stats {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      margin-bottom: 24px;
+    }
+
+    .win-stat {
+      background: var(--bg-surface);
+      border-radius: 14px;
+      padding: 12px 20px;
+      min-width: 100px;
+    }
+
+    .win-stat-label {
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+
+    .win-stat-value {
+      font-family: 'Syne', sans-serif;
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: var(--accent-gold);
+    }
+
+    .win-new-record {
+      background: linear-gradient(135deg, rgba(245,200,66,0.15), rgba(245,200,66,0.05));
+      border: 1px solid rgba(245,200,66,0.3);
+      border-radius: 50px;
+      padding: 6px 16px;
+      font-size: 0.75rem;
+      color: var(--accent-gold);
+      letter-spacing: 1px;
+      margin-bottom: 16px;
+      display: inline-block;
+    }
+
+    .win-new-record.hidden { display: none; }
+
+    .win-actions {
+      display: flex;
+      gap: 10px;
+    }
+
+    /* ============================================================
+       CONFETTI CANVAS
+    ============================================================ */
+    #confetti-canvas {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 999;
+    }
+
+    /* ============================================================
+       INSTALL BANNER
+    ============================================================ */
+    .install-banner {
+      width: 100%;
+      background: linear-gradient(135deg, rgba(168,85,247,0.15), rgba(0,212,255,0.1));
+      border: 1px solid rgba(168,85,247,0.25);
+      border-radius: var(--radius-card);
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      display: none;
+    }
+
+    .install-banner.visible {
+      display: flex;
+    }
+
+    .install-banner-text {
+      flex: 1;
+      font-size: 0.82rem;
+      color: var(--text-primary);
+      line-height: 1.4;
+    }
+
+    .install-banner-text strong {
+      color: var(--accent-cyan);
+    }
+
+    .btn-install {
+      background: linear-gradient(135deg, var(--accent-violet), var(--accent-cyan));
+      color: #fff;
+      border: none;
+      border-radius: 50px;
+      padding: 8px 16px;
+      font-family: 'Cairo', sans-serif;
+      font-size: 0.78rem;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+      box-shadow: 0 2px 10px rgba(168,85,247,0.3);
+    }
+
+    /* ============================================================
+       FOOTER
+    ============================================================ */
+    .footer {
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 0.7rem;
+      letter-spacing: 1px;
+      opacity: 0.6;
+    }
+
+    /* ============================================================
+       RESPONSIVE
+    ============================================================ */
+    @media (min-width: 480px) {
+      .app-wrapper {
+        padding: 28px 24px 40px;
+        gap: 20px;
+      }
+
+      .board-container {
+        max-width: 400px;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .tile {
+        transition: none !important;
+      }
+    }
+
+    /* ============================================================
+       LOADING SCREEN
+    ============================================================ */
+    .loading-screen {
+      position: fixed;
+      inset: 0;
+      background: var(--bg-deep);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+      transition: opacity 500ms ease;
+    }
+
+    .loading-screen.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .loader-ring {
+      width: 56px;
+      height: 56px;
+      border: 3px solid rgba(255,255,255,0.05);
+      border-top-color: var(--accent-violet);
+      border-right-color: var(--accent-cyan);
+      border-radius: 50%;
+      animation: spin 800ms linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Loading Screen -->
+  <div class="loading-screen" id="loadingScreen">
+    <div class="loader-ring"></div>
+  </div>
+
+  <!-- Confetti Canvas -->
+  <canvas id="confetti-canvas"></canvas>
+
+  <!-- Win Overlay -->
+  <div class="win-overlay" id="winOverlay" role="dialog" aria-modal="true" aria-label="لقد فزت!">
+    <div class="win-card">
+      <div class="win-emoji">🎉</div>
+      <div class="win-title">أحسنت!</div>
+      <div class="win-subtitle">لقد حللت اللغز بنجاح</div>
+      <div class="win-stats">
+        <div class="win-stat">
+          <div class="win-stat-label">الوقت</div>
+          <div class="win-stat-value" id="winTime">0:00</div>
+        </div>
+        <div class="win-stat">
+          <div class="win-stat-label">الحركات</div>
+          <div class="win-stat-value" id="winMoves">0</div>
+        </div>
+      </div>
+      <div class="win-new-record hidden" id="newRecordBadge">⭐ رقم قياسي جديد!</div>
+      <div class="win-actions">
+        <button class="btn btn-secondary" onclick="closeWin()">✕ إغلاق</button>
+        <button class="btn btn-primary" onclick="startNewGame()">🔄 لعبة جديدة</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main App -->
+  <div class="app-wrapper">
+
+    <!-- Header -->
+    <header class="header">
+      <h1 class="header-title">🧩 Sliding Puzzle</h1>
+      <p class="header-subtitle">اللغز المنزلق الكلاسيكي</p>
+    </header>
+
+    <!-- Install Banner -->
+    <div class="install-banner" id="installBanner">
+      <div>📱</div>
+      <div class="install-banner-text">
+        <strong>ثبّت التطبيق</strong><br>العب بدون إنترنت من شاشتك الرئيسية
+      </div>
+      <button class="btn-install" id="installBtn">تثبيت</button>
+    </div>
+
+    <!-- Mode Switcher -->
+    <div class="mode-switcher" role="group" aria-label="نوع اللعبة">
+      <button class="mode-btn active" id="btnNumbers" onclick="switchMode('numbers')">🔢 أرقام</button>
+      <button class="mode-btn" id="btnLetters" onclick="switchMode('letters')">🔤 حروف</button>
+      <button class="mode-btn" id="btnImages"  onclick="switchMode('images')">🖼️ صور</button>
+    </div>
+
+    <!-- Stats Bar -->
+    <div class="stats-bar">
+      <div class="stat-card">
+        <div class="stat-label">الوقت</div>
+        <div class="stat-value" id="timerDisplay">0:00</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">الحركات</div>
+        <div class="stat-value" id="movesDisplay">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">أفضل وقت</div>
+        <div class="stat-value highlight" id="bestTimeDisplay">—</div>
+      </div>
+    </div>
+
+    <!-- Game Board -->
+    <div class="board-container" id="boardContainer">
+      <div class="board" id="board" role="grid" aria-label="لوحة اللغز"></div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="actions">
+      <button class="btn btn-secondary" id="hintBtn" onclick="showHint()" style="display:none;">💡 تلميح</button>
+      <button class="btn btn-secondary" onclick="startNewGame()">🔀 خلط جديد</button>
+      <button class="btn btn-primary"  onclick="resetBoard()">↩ إعادة</button>
+    </div>
+
+    <!-- High Score Panel -->
+    <div class="highscore-panel">
+      <div class="highscore-title">أفضل النتائج</div>
+      <div class="highscore-row">
+        <div class="hs-item">
+          <div class="hs-label">أقل حركات</div>
+          <div class="hs-value" id="hsBestMoves">—</div>
+        </div>
+        <div class="hs-item">
+          <div class="hs-label">أفضل وقت</div>
+          <div class="hs-value" id="hsBestTime">—</div>
+        </div>
+        <div class="hs-item">
+          <div class="hs-label">مجموع الألعاب</div>
+          <div class="hs-value" id="hsTotalGames">0</div>
+        </div>
+      </div>
+    </div>
+
+    <footer class="footer">v1.0 — Phase 1 Complete</footer>
+
+  </div><!-- end app-wrapper -->
+
+  <script>
+  /* ============================================================
+     GAME STATE
+  ============================================================ */
+  const STATE = {
+    mode:        'numbers',   // 'numbers' | 'letters' | 'images'
+    board:       [],          // current tile values (0 = empty)
+    solution:    [],          // solved state for current mode
+    emptyIndex:  8,           // position of empty tile (0-8)
+    moves:       0,
+    timerSecs:   0,
+    timerRunning: false,
+    timerInterval: null,
+    gameStarted: false,
+    initialBoard: [],         // snapshot after shuffle (for reset)
+  };
+
+  /* ============================================================
+     CONSTANTS
+  ============================================================ */
+  const NUMBERS  = [1,2,3,4,5,6,7,8,0];
+  const LETTERS  = ['A','B','C','D','E','F','G','H',0];
+
+  /* Neighbour offsets for a 3×3 grid */
+  const NEIGHBORS = {
+    0: [1,3],    1: [0,2,4],    2: [1,5],
+    3: [0,4,6],  4: [1,3,5,7],  5: [2,4,8],
+    6: [3,7],    7: [4,6,8],    8: [5,7],
+  };
+
+  /* ============================================================
+     SOLVABLE SHUFFLE
+     Ensures the puzzle is always solvable by counting inversions
+     and adjusting if needed.
+  ============================================================ */
+  function isSolvable(arr) {
+    const flat = arr.filter(v => v !== 0);
+    let inversions = 0;
+    for (let i = 0; i < flat.length; i++) {
+      for (let j = i + 1; j < flat.length; j++) {
+        // Compare by index in the solution (not value directly for letters)
+        const sol = STATE.solution;
+        const idxI = sol.indexOf(flat[i]);
+        const idxJ = sol.indexOf(flat[j]);
+        if (idxI > idxJ) inversions++;
+      }
+    }
+    return inversions % 2 === 0;
+  }
+
+  function shuffleArray(arr) {
+    const a = [...arr];
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  function generateSolvableBoard() {
+    let attempt;
+    do {
+      attempt = shuffleArray(STATE.solution);
+    } while (!isSolvable(attempt) || isAlreadySolved(attempt));
+    return attempt;
+  }
+
+  function isAlreadySolved(board) {
+    return board.every((v, i) => v === STATE.solution[i]);
+  }
+
+  /* ============================================================
+     INIT GAME
+  ============================================================ */
+  function initGame() {
+    // Set solution for current mode
+    if (STATE.mode === 'numbers') {
+      STATE.solution = [...NUMBERS];
+    } else if (STATE.mode === 'letters') {
+      STATE.solution = [...LETTERS];
+    } else {
+      // Images: use 1-8 as indices, 0 = empty
+      STATE.solution = [1,2,3,4,5,6,7,8,0];
+    }
+
+    STATE.board       = generateSolvableBoard();
+    STATE.initialBoard = [...STATE.board];
+    STATE.emptyIndex  = STATE.board.indexOf(0);
+    STATE.moves       = 0;
+    STATE.gameStarted = false;
+
+    stopTimer();
+    STATE.timerSecs = 0;
+
+    updateMovesDisplay();
+    updateTimerDisplay();
+    renderBoard();
+    updateHighScoreDisplay();
+    document.getElementById('boardContainer').classList.remove('winning');
+  }
+
+  function startNewGame() {
+    closeWin();
+    initGame();
+  }
+
+  function resetBoard() {
+    // Reset to the shuffled state (not resolved)
+    STATE.board      = [...STATE.initialBoard];
+    STATE.emptyIndex = STATE.board.indexOf(0);
+    STATE.moves      = 0;
+    STATE.gameStarted = false;
+
+    stopTimer();
+    STATE.timerSecs = 0;
+
+    updateMovesDisplay();
+    updateTimerDisplay();
+    renderBoard();
+    document.getElementById('boardContainer').classList.remove('winning');
+  }
+
+  /* ============================================================
+     RENDER BOARD
+  ============================================================ */
+  function renderBoard() {
+    const board = document.getElementById('board');
+    board.innerHTML = '';
+
+    STATE.board.forEach((val, idx) => {
+      const tile = document.createElement('div');
+      tile.classList.add('tile');
+
+      if (val === 0) {
+        tile.classList.add('empty');
+        tile.setAttribute('aria-hidden', 'true');
+      } else {
+        tile.setAttribute('data-mode', STATE.mode);
+        tile.setAttribute('data-value', val);
+        tile.setAttribute('role', 'button');
+        tile.setAttribute('aria-label', `قطعة ${val}`);
+        tile.setAttribute('tabindex', '0');
+
+        if (STATE.mode === 'numbers' || STATE.mode === 'letters') {
+          const span = document.createElement('span');
+          span.classList.add('tile-number');
+          span.textContent = val;
+          tile.appendChild(span);
+        } else {
+          // Images mode — show background slice
+          renderImageTile(tile, val);
+        }
+
+        tile.addEventListener('click', () => handleTileClick(idx));
+        tile.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') handleTileClick(idx);
+        });
+      }
+
+      board.appendChild(tile);
+    });
+  }
+
+  /* Image tile rendering (used in Phase 2, placeholder here) */
+  function renderImageTile(tile, val) {
+    const span = document.createElement('span');
+    span.classList.add('tile-number');
+    span.textContent = val;
+    tile.appendChild(span);
+    // Full image implementation in Phase 2
+  }
+
+  /* ============================================================
+     HANDLE TILE CLICK
+  ============================================================ */
+  function handleTileClick(tileIdx) {
+    if (STATE.board[tileIdx] === 0) return;
+    if (!NEIGHBORS[tileIdx].includes(STATE.emptyIndex)) return;
+
+    // Start game on first move
+    if (!STATE.gameStarted) {
+      STATE.gameStarted = true;
+      startTimer();
+    }
+
+    // Swap tile with empty
+    const emptyIdx = STATE.emptyIndex;
+    STATE.board[emptyIdx] = STATE.board[tileIdx];
+    STATE.board[tileIdx]  = 0;
+    STATE.emptyIndex = tileIdx;
+    STATE.moves++;
+
+    updateMovesDisplay();
+    renderBoard();
+
+    // Add sliding animation to moved tile
+    const tiles = document.querySelectorAll('.tile');
+    const movedTile = tiles[emptyIdx];
+    if (movedTile) {
+      movedTile.classList.add('sliding');
+      movedTile.addEventListener('animationend', () => movedTile.classList.remove('sliding'), { once: true });
+    }
+
+    // Check win
+    if (checkWin()) {
+      handleWin();
+    }
+  }
+
+  /* ============================================================
+     WIN DETECTION
+  ============================================================ */
+  function checkWin() {
+    return STATE.board.every((v, i) => v === STATE.solution[i]);
+  }
+
+  /* ============================================================
+     HANDLE WIN
+  ============================================================ */
+  function handleWin() {
+    stopTimer();
+    document.getElementById('boardContainer').classList.add('winning');
+
+    // Animate tiles
+    const tiles = document.querySelectorAll('.tile:not(.empty)');
+    tiles.forEach((t, i) => {
+      setTimeout(() => t.classList.add('win-tile'), i * 60);
+    });
+
+    // Update high score
+    const isNewRecord = updateHighScore();
+
+    // Show win overlay after brief delay
+    setTimeout(() => {
+      document.getElementById('winTime').textContent  = formatTime(STATE.timerSecs);
+      document.getElementById('winMoves').textContent = STATE.moves;
+      document.getElementById('newRecordBadge').classList.toggle('hidden', !isNewRecord);
+      document.getElementById('winOverlay').classList.add('visible');
+      launchConfetti();
+    }, 600);
+  }
+
+  function closeWin() {
+    document.getElementById('winOverlay').classList.remove('visible');
+    stopConfetti();
+  }
+
+  /* ============================================================
+     TIMER
+  ============================================================ */
+  function startTimer() {
+    STATE.timerRunning = true;
+    STATE.timerInterval = setInterval(() => {
+      STATE.timerSecs++;
+      updateTimerDisplay();
+    }, 1000);
+  }
+
+  function stopTimer() {
+    STATE.timerRunning = false;
+    clearInterval(STATE.timerInterval);
+    STATE.timerInterval = null;
+  }
+
+  function updateTimerDisplay() {
+    document.getElementById('timerDisplay').textContent = formatTime(STATE.timerSecs);
+  }
+
+  function updateMovesDisplay() {
+    document.getElementById('movesDisplay').textContent = STATE.moves;
+  }
+
+  function formatTime(secs) {
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  }
+
+  /* ============================================================
+     HIGH SCORE (LocalStorage)
+  ============================================================ */
+  function getHSKey() {
+    return `sliding_hs_${STATE.mode}`;
+  }
+
+  function loadHighScore() {
+    try {
+      const raw = localStorage.getItem(getHSKey());
+      return raw ? JSON.parse(raw) : { bestMoves: null, bestTime: null, totalGames: 0 };
+    } catch { return { bestMoves: null, bestTime: null, totalGames: 0 }; }
+  }
+
+  function saveHighScore(hs) {
+    try { localStorage.setItem(getHSKey(), JSON.stringify(hs)); } catch {}
+  }
+
+  function updateHighScore() {
+    const hs = loadHighScore();
+    hs.totalGames++;
+    let isRecord = false;
+
+    if (hs.bestMoves === null || STATE.moves < hs.bestMoves) {
+      hs.bestMoves = STATE.moves;
+      isRecord = true;
+    }
+    if (hs.bestTime === null || STATE.timerSecs < hs.bestTime) {
+      hs.bestTime = STATE.timerSecs;
+      isRecord = true;
+    }
+
+    saveHighScore(hs);
+    updateHighScoreDisplay();
+    return isRecord;
+  }
+
+  function updateHighScoreDisplay() {
+    const hs = loadHighScore();
+    document.getElementById('hsBestMoves').textContent   = hs.bestMoves  !== null ? hs.bestMoves         : '—';
+    document.getElementById('hsBestTime').textContent    = hs.bestTime   !== null ? formatTime(hs.bestTime) : '—';
+    document.getElementById('hsTotalGames').textContent  = hs.totalGames;
+    document.getElementById('bestTimeDisplay').textContent = hs.bestTime !== null ? formatTime(hs.bestTime) : '—';
+  }
+
+  /* ============================================================
+     MODE SWITCHER
+  ============================================================ */
+  function switchMode(mode) {
+    if (STATE.mode === mode) return;
+    STATE.mode = mode;
+
+    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('btn' + mode.charAt(0).toUpperCase() + mode.slice(1)).classList.add('active');
+
+    // Show/hide hint button
+    document.getElementById('hintBtn').style.display = mode === 'images' ? 'flex' : 'none';
+
+    initGame();
+  }
+
+  /* ============================================================
+     HINT (Phase 2 — placeholder)
+  ============================================================ */
+  function showHint() {
+    alert('🖼️ وضع الصور سيكون متاحاً في المرحلة الثانية!');
+  }
+
+  /* ============================================================
+     CONFETTI ENGINE
+  ============================================================ */
+  let confettiParticles = [];
+  let confettiAnimId = null;
+  const confettiCanvas  = document.getElementById('confetti-canvas');
+  const confettiCtx     = confettiCanvas.getContext('2d');
+
+  const CONFETTI_COLORS = [
+    '#f5c842', '#00d4ff', '#a855f7', '#22c55e',
+    '#f472b6', '#fb923c', '#60a5fa', '#f87171',
+  ];
+
+  function launchConfetti() {
+    confettiCanvas.width  = window.innerWidth;
+    confettiCanvas.height = window.innerHeight;
+
+    confettiParticles = Array.from({ length: 120 }, () => ({
+      x:    Math.random() * confettiCanvas.width,
+      y:    -20 - Math.random() * 100,
+      vx:   (Math.random() - 0.5) * 4,
+      vy:   2 + Math.random() * 3,
+      rot:  Math.random() * 360,
+      rotV: (Math.random() - 0.5) * 6,
+      w:    6 + Math.random() * 8,
+      h:    3 + Math.random() * 4,
+      color: CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)],
+      opacity: 1,
+    }));
+
+    animateConfetti();
+  }
+
+  function animateConfetti() {
+    confettiCtx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+
+    confettiParticles = confettiParticles.filter(p => p.opacity > 0.05);
+
+    confettiParticles.forEach(p => {
+      p.x   += p.vx;
+      p.y   += p.vy;
+      p.rot += p.rotV;
+      p.vy  += 0.06; // gravity
+
+      if (p.y > confettiCanvas.height * 0.7) p.opacity -= 0.018;
+
+      confettiCtx.save();
+      confettiCtx.globalAlpha = p.opacity;
+      confettiCtx.translate(p.x, p.y);
+      confettiCtx.rotate((p.rot * Math.PI) / 180);
+      confettiCtx.fillStyle = p.color;
+      confettiCtx.beginPath();
+      confettiCtx.ellipse(0, 0, p.w, p.h, 0, 0, Math.PI * 2);
+      confettiCtx.fill();
+      confettiCtx.restore();
+    });
+
+    if (confettiParticles.length > 0) {
+      confettiAnimId = requestAnimationFrame(animateConfetti);
+    } else {
+      confettiCtx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+    }
+  }
+
+  function stopConfetti() {
+    if (confettiAnimId) {
+      cancelAnimationFrame(confettiAnimId);
+      confettiAnimId = null;
+    }
+    confettiCtx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+    confettiParticles = [];
+  }
+
+  /* ============================================================
+     KEYBOARD NAVIGATION (Arrow Keys)
+  ============================================================ */
+  document.addEventListener('keydown', (e) => {
+    const emptyIdx = STATE.emptyIndex;
+    let targetIdx  = -1;
+
+    // Arrow key moves the TILE into the empty space
+    if (e.key === 'ArrowLeft')  { if (emptyIdx % 3 < 2) targetIdx = emptyIdx + 1; }
+    if (e.key === 'ArrowRight') { if (emptyIdx % 3 > 0) targetIdx = emptyIdx - 1; }
+    if (e.key === 'ArrowUp')    { if (emptyIdx < 6)     targetIdx = emptyIdx + 3; }
+    if (e.key === 'ArrowDown')  { if (emptyIdx > 2)     targetIdx = emptyIdx - 3; }
+
+    if (targetIdx !== -1) {
+      e.preventDefault();
+      handleTileClick(targetIdx);
+    }
+  });
+
+  /* ============================================================
+     PWA — Install Prompt
+  ============================================================ */
+  let deferredInstallPrompt = null;
+
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredInstallPrompt = e;
+    document.getElementById('installBanner').classList.add('visible');
+  });
+
+  document.getElementById('installBtn').addEventListener('click', async () => {
+    if (!deferredInstallPrompt) return;
+    deferredInstallPrompt.prompt();
+    const { outcome } = await deferredInstallPrompt.userChoice;
+    if (outcome === 'accepted') {
+      document.getElementById('installBanner').classList.remove('visible');
+    }
+    deferredInstallPrompt = null;
+  });
+
+  window.addEventListener('appinstalled', () => {
+    document.getElementById('installBanner').classList.remove('visible');
+    deferredInstallPrompt = null;
+  });
+
+  /* ============================================================
+     SERVICE WORKER REGISTRATION
+  ============================================================ */
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js').catch(() => {});
+    });
+  }
+
+  /* ============================================================
+     BOOT
+  ============================================================ */
+  window.addEventListener('DOMContentLoaded', () => {
+    // Hide loader after fonts load
+    setTimeout(() => {
+      document.getElementById('loadingScreen').classList.add('hidden');
+    }, 600);
+
+    initGame();
+  });
+  </script>
+</body>
+</html>
