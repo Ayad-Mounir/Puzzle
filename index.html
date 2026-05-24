@@ -325,7 +325,7 @@
 
     .tile-number {
       font-family: 'Syne', sans-serif;
-      font-size: clamp(1.6rem, 5vw, 2.2rem);
+      font-size: calc(clamp(1.6rem, 5vw, 2.2rem) * var(--font-scale, 1));
       font-weight: 800;
       color: var(--text-tile);
       text-shadow:
@@ -857,6 +857,44 @@
       letter-spacing: 2px;
     }
 
+
+    /* ============================================================
+       DIFFICULTY SWITCHER
+    ============================================================ */
+    .difficulty-switcher {
+      display: flex;
+      gap: 8px;
+      background: var(--bg-card);
+      border-radius: 50px;
+      padding: 5px;
+      border: 1px solid rgba(255,255,255,0.06);
+      box-shadow: 0 4px 20px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05);
+    }
+
+    .diff-btn {
+      padding: 7px 16px;
+      border-radius: 50px;
+      border: none;
+      cursor: pointer;
+      font-family: 'Cairo', sans-serif;
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      background: transparent;
+      transition: all 200ms ease;
+      white-space: nowrap;
+    }
+
+    .diff-btn.active {
+      background: linear-gradient(135deg, #f5c842, #ff9f43);
+      color: #000;
+      box-shadow: 0 2px 12px rgba(245,200,66,0.4);
+    }
+
+    .diff-btn:hover:not(.active) {
+      color: var(--text-primary);
+    }
+
   </style>
 </head>
 <body>
@@ -936,6 +974,13 @@
       <button class="mode-btn" id="btnImages"  onclick="switchMode('images')">🖼️ صور</button>
     </div>
 
+    <!-- Difficulty Switcher -->
+    <div class="difficulty-switcher" role="group" aria-label="مستوى الصعوبة">
+      <button class="diff-btn active" id="diff3" onclick="switchDifficulty(3)">3×3 سهل</button>
+      <button class="diff-btn"        id="diff4" onclick="switchDifficulty(4)">4×4 متوسط</button>
+      <button class="diff-btn"        id="diff5" onclick="switchDifficulty(5)">5×5 صعب</button>
+    </div>
+
     <!-- Stats Bar -->
     <div class="stats-bar">
       <div class="stat-card">
@@ -983,7 +1028,7 @@
       </div>
     </div>
 
-    <footer class="footer">v1.1 — Phase 2: وضع الصور ✅</footer>
+    <footer class="footer">v1.2 — Phase 3: مستويات الصعوبة ✅</footer>
 
   </div><!-- end app-wrapper -->
 
@@ -994,6 +1039,7 @@
   const STATE = {
     mode:        'numbers',   // 'numbers' | 'letters' | 'images'
     imageDataURL: null,       // base64 صورة اللاعب المخصصة
+    gridSize:     3,           // 3 | 4 | 5
     board:       [],          // current tile values (0 = empty)
     solution:    [],          // solved state for current mode
     emptyIndex:  8,           // position of empty tile (0-8)
@@ -1008,15 +1054,33 @@
   /* ============================================================
      CONSTANTS
   ============================================================ */
-  const NUMBERS  = [1,2,3,4,5,6,7,8,0];
-  const LETTERS  = ['A','B','C','D','E','F','G','H',0];
+  /* Generates tile values dynamically for any grid size */
+  function buildSolution(size) {
+    const total = size * size;
+    if (STATE.mode === 'letters') {
+      const alpha = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').slice(0, total - 1);
+      return [...alpha, 0];
+    }
+    const nums = Array.from({length: total - 1}, (_, i) => i + 1);
+    return [...nums, 0];
+  }
 
-  /* Neighbour offsets for a 3×3 grid */
-  const NEIGHBORS = {
-    0: [1,3],    1: [0,2,4],    2: [1,5],
-    3: [0,4,6],  4: [1,3,5,7],  5: [2,4,8],
-    6: [3,7],    7: [4,6,8],    8: [5,7],
-  };
+  /* Build NEIGHBORS map dynamically for N×N grid */
+  function buildNeighbors(size) {
+    const total = size * size;
+    const nb = {};
+    for (let i = 0; i < total; i++) {
+      nb[i] = [];
+      const row = Math.floor(i / size), col = i % size;
+      if (col > 0)        nb[i].push(i - 1);
+      if (col < size - 1) nb[i].push(i + 1);
+      if (row > 0)        nb[i].push(i - size);
+      if (row < size - 1) nb[i].push(i + size);
+    }
+    return nb;
+  }
+
+  let NEIGHBORS = buildNeighbors(3);
 
   /* ============================================================
      SOLVABLE SHUFFLE
@@ -1063,15 +1127,9 @@
      INIT GAME
   ============================================================ */
   function initGame() {
-    // Set solution for current mode
-    if (STATE.mode === 'numbers') {
-      STATE.solution = [...NUMBERS];
-    } else if (STATE.mode === 'letters') {
-      STATE.solution = [...LETTERS];
-    } else {
-      // Images: use 1-8 as indices, 0 = empty
-      STATE.solution = [1,2,3,4,5,6,7,8,0];
-    }
+    const size  = STATE.gridSize;
+    NEIGHBORS   = buildNeighbors(size);
+    STATE.solution = buildSolution(size);
 
     STATE.board       = generateSolvableBoard();
     STATE.initialBoard = [...STATE.board];
@@ -1081,6 +1139,15 @@
 
     stopTimer();
     STATE.timerSecs = 0;
+
+    // ضبط CSS grid ديناميكياً
+    const board = document.getElementById('board');
+    board.style.gridTemplateColumns = `repeat(${size}, 1fr)`;
+    board.style.gridTemplateRows    = `repeat(${size}, 1fr)`;
+
+    // ضبط حجم الخط حسب الشبكة
+    const fontScale = size === 3 ? '1' : size === 4 ? '0.75' : '0.6';
+    document.documentElement.style.setProperty('--font-scale', fontScale);
 
     updateMovesDisplay();
     updateTimerDisplay();
@@ -1172,12 +1239,13 @@
 
     // حساب موضع القطعة في الشبكة الأصلية
     const solIdx = STATE.solution.indexOf(val); // موضعها في الحل
-    const col = solIdx % 3;
-    const row = Math.floor(solIdx / 3);
+    const sz  = STATE.gridSize;
+    const col = solIdx % sz;
+    const row = Math.floor(solIdx / sz);
 
     const boardEl  = document.getElementById('board');
-    const tileSize = boardEl.offsetWidth / 3;
-    const imgSize  = tileSize * 3;
+    const tileSize = boardEl.offsetWidth / sz;
+    const imgSize  = tileSize * sz;
 
     tile.style.backgroundImage    = `url(${STATE.imageDataURL})`;
     tile.style.backgroundSize     = `${imgSize}px ${imgSize}px`;
@@ -1295,7 +1363,7 @@
      HIGH SCORE (LocalStorage)
   ============================================================ */
   function getHSKey() {
-    return `sliding_hs_${STATE.mode}`;
+    return `sliding_hs_${STATE.mode}_${STATE.gridSize}x${STATE.gridSize}`;
   }
 
   function loadHighScore() {
@@ -1350,6 +1418,19 @@
     const isImg = mode === 'images';
     document.getElementById('hintBtn').style.display    = isImg ? 'flex' : 'none';
     document.getElementById('uploadArea').classList.toggle('visible', isImg);
+
+    initGame();
+  }
+
+  /* ============================================================
+     DIFFICULTY SWITCHER
+  ============================================================ */
+  function switchDifficulty(size) {
+    if (STATE.gridSize === size) return;
+    STATE.gridSize = size;
+
+    document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('diff' + size).classList.add('active');
 
     initGame();
   }
@@ -1473,10 +1554,11 @@
     let targetIdx  = -1;
 
     // Arrow key moves the TILE into the empty space
-    if (e.key === 'ArrowLeft')  { if (emptyIdx % 3 < 2) targetIdx = emptyIdx + 1; }
-    if (e.key === 'ArrowRight') { if (emptyIdx % 3 > 0) targetIdx = emptyIdx - 1; }
-    if (e.key === 'ArrowUp')    { if (emptyIdx < 6)     targetIdx = emptyIdx + 3; }
-    if (e.key === 'ArrowDown')  { if (emptyIdx > 2)     targetIdx = emptyIdx - 3; }
+    const sz = STATE.gridSize;
+    if (e.key === 'ArrowLeft')  { if (emptyIdx % sz < sz-1) targetIdx = emptyIdx + 1; }
+    if (e.key === 'ArrowRight') { if (emptyIdx % sz > 0)    targetIdx = emptyIdx - 1; }
+    if (e.key === 'ArrowUp')    { if (emptyIdx < sz*(sz-1)) targetIdx = emptyIdx + sz; }
+    if (e.key === 'ArrowDown')  { if (emptyIdx >= sz)       targetIdx = emptyIdx - sz; }
 
     if (targetIdx !== -1) {
       e.preventDefault();
@@ -1533,4 +1615,5 @@
   </script>
 </body>
 </html>
+
 
