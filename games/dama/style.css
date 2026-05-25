@@ -75,8 +75,8 @@
       border: 1px solid rgba(255,255,255,0.07);
       box-shadow: 0 8px 40px rgba(0,0,0,0.5);
       /* منع اهتزاز الشاشة عند تحديث اللوحة */
-      contain: strict;
-      will-change: transform;
+      contain: content;
+      will-change: auto;
     }
 
     .dama-board {
@@ -271,21 +271,21 @@
     /* AI thinking */
     .dama-ai-badge {
       position: fixed;
-      bottom: 80px;
+      bottom: 24px;
       left: 50%;
       transform: translateX(-50%);
       z-index: 100;
       display: flex;
       align-items: center;
-      gap: 8px;
-      padding: 8px 18px;
-      background: rgba(168,85,247,0.9);
+      gap: 6px;
+      padding: 6px 14px;
+      background: rgba(30,20,60,0.92);
       border-radius: 50px;
-      border: 1px solid rgba(168,85,247,0.5);
-      font-size: 0.8rem;
-      color: #fff;
-      backdrop-filter: blur(10px);
-      box-shadow: 0 4px 20px rgba(168,85,247,0.4);
+      border: 1px solid rgba(168,85,247,0.4);
+      font-size: 0.75rem;
+      color: #c084fc;
+      backdrop-filter: blur(12px);
+      box-shadow: 0 2px 12px rgba(0,0,0,0.4);
       opacity: 0;
       pointer-events: none;
       transition: opacity 200ms ease;
