@@ -8,7 +8,7 @@
   width: 100%;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 #snakeSection.visible {
   display: flex;
@@ -87,18 +87,19 @@
 .snake-dpad {
   direction: ltr;
   display: grid;
-  grid-template-columns: repeat(3, 54px);
-  grid-template-rows: repeat(3, 54px);
-  gap: 6px;
+  grid-template-columns: repeat(3, 72px);
+  grid-template-rows: repeat(3, 64px);
+  gap: 8px;
+  margin-top: 4px;
 }
 .dpad-btn {
-  width: 54px;
-  height: 54px;
-  border-radius: 12px;
-  border: 1px solid rgba(255,255,255,0.1);
+  width: 72px;
+  height: 64px;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,0.12);
   background: var(--bg-card);
   color: var(--text-primary);
-  font-size: 1.3rem;
+  font-size: 1.5rem;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -106,11 +107,12 @@
   transition: background .15s, transform .1s;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
 }
 .dpad-btn:active {
   background: #64ffda;
   color: #0a0a1f;
-  transform: scale(0.9);
+  transform: scale(0.88);
 }
 .dpad-empty {
   background: transparent;
