@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
   <meta name="theme-color" content="#1a1a2e" />
-  <meta name="description" content="ألعاب الزمن الجميل — Sliding Puzzle + الداما المغربية" />
+  <meta name="description" content="ألعاب الزمن الجميل — Sliding Puzzle + الداما المغربية + التعبان" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Puzzle" />
@@ -13,11 +13,11 @@
   <meta property="og:type"        content="website" />
   <meta property="og:url"         content="https://ayad-mounir.github.io/Puzzle/" />
   <meta property="og:title"       content="🎮 ألعاب الزمن الجميل" />
-  <meta property="og:description" content="Sliding Puzzle + الداما المغربية — PWA تعمل Offline" />
+  <meta property="og:description" content="Sliding Puzzle + الداما المغربية + التعبان — PWA تعمل Offline" />
   <meta property="og:image"       content="https://ayad-mounir.github.io/Puzzle/icons/icon-512.png" />
   <meta name="twitter:card"       content="summary" />
   <meta name="twitter:title"      content="🎮 ألعاب الزمن الجميل" />
-  <meta name="twitter:description" content="Sliding Puzzle + الداما المغربية — PWA Offline" />
+  <meta name="twitter:description" content="Sliding Puzzle + الداما المغربية + التعبان — PWA Offline" />
   <meta name="twitter:image"      content="https://ayad-mounir.github.io/Puzzle/icons/icon-512.png" />
   <link rel="manifest" href="manifest.json" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
@@ -38,6 +38,7 @@
   <!-- Games -->
   <link rel="stylesheet" href="games/sliding-puzzle/style.css" />
   <link rel="stylesheet" href="games/dama/style.css" />
+  <link rel="stylesheet" href="games/snake/style.css" />
 </head>
 
 <body>
@@ -91,6 +92,19 @@
     </div>
   </div>
 
+  <!-- Snake Game Over Overlay -->
+  <div class="snake-overlay" id="snakeOverlay" role="dialog" aria-modal="true">
+    <div class="snake-overlay-card">
+      <div class="snake-overlay-emoji">🐍</div>
+      <div class="snake-overlay-title">انتهت اللعبة!</div>
+      <div class="snake-overlay-score" id="snakeOverlayScore">النقاط: 0</div>
+      <div class="snake-overlay-record" id="snakeOverlayRecord"></div>
+      <div class="snake-overlay-btns">
+        <button class="btn btn-primary" onclick="SNAKE.newGame()">🔄 مجدداً</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Main App -->
   <div class="app-wrapper">
 
@@ -104,6 +118,7 @@
     <div class="game-selector" role="group" aria-label="اختر اللعبة">
       <button class="game-tab active" id="tabPuzzle" onclick="switchGame('puzzle')">🧩 اللغز المنزلق</button>
       <button class="game-tab" id="tabDama"   onclick="switchGame('dama')">♟️ الداما المغربية</button>
+      <button class="game-tab" id="tabSnake"  onclick="switchGame('snake')">🐍 التعبان</button>
     </div>
 
     <!-- Install Banner -->
@@ -270,7 +285,74 @@
 
     </div><!-- end damaSection -->
 
-    <footer class="footer" id="mainFooter">v2.0 — Phase 5: Sound + Ghost + Share ✅</footer>
+    <!-- ============================================================
+         SNAKE SECTION — لعبة التعبان
+    ============================================================ -->
+    <div id="snakeSection">
+
+      <!-- Stats -->
+      <div class="snake-stats">
+        <div class="snake-stat">
+          <div class="snake-stat-label">النقاط</div>
+          <div class="snake-stat-value green" id="snakeScore">0</div>
+        </div>
+        <div class="snake-stat">
+          <div class="snake-stat-label">المستوى</div>
+          <div class="snake-stat-value" id="snakeLevel">1</div>
+        </div>
+        <div class="snake-stat">
+          <div class="snake-stat-label">الرقم القياسي</div>
+          <div class="snake-stat-value yellow" id="snakeBest">0</div>
+        </div>
+      </div>
+
+      <!-- Speed Selector -->
+      <div class="snake-speed">
+        <button class="speed-btn" data-speed="slow"   onclick="SNAKE.setSpeed('slow')">🐢 بطيء</button>
+        <button class="speed-btn active" data-speed="medium" onclick="SNAKE.setSpeed('medium')">🐍 عادي</button>
+        <button class="speed-btn" data-speed="fast"   onclick="SNAKE.setSpeed('fast')">⚡ سريع</button>
+      </div>
+
+      <!-- Canvas -->
+      <div class="snake-board-wrap">
+        <canvas id="snakeCanvas"></canvas>
+      </div>
+
+      <!-- D-Pad (touch controls) -->
+      <div class="snake-dpad">
+        <div class="dpad-empty"></div>
+        <button class="dpad-btn" onclick="SNAKE.dpad('U')" aria-label="أعلى">▲</button>
+        <div class="dpad-empty"></div>
+        <button class="dpad-btn" onclick="SNAKE.dpad('L')" aria-label="يسار">◄</button>
+        <div class="dpad-empty"></div>
+        <button class="dpad-btn" onclick="SNAKE.dpad('R')" aria-label="يمين">►</button>
+        <div class="dpad-empty"></div>
+        <button class="dpad-btn" onclick="SNAKE.dpad('D')" aria-label="أسفل">▼</button>
+        <div class="dpad-empty"></div>
+      </div>
+
+      <!-- Actions -->
+      <div class="snake-actions">
+        <button class="btn btn-secondary" onclick="SNAKE.newGame()">🔄 لعبة جديدة</button>
+        <button class="btn btn-primary"   id="snakePauseBtn" onclick="SNAKE.togglePause()">⏸ إيقاف</button>
+      </div>
+
+      <!-- Tips -->
+      <div class="dama-rules" style="margin-top:8px">
+        <div class="dama-rules-title">🎮 طريقة اللعب</div>
+        <ul style="padding-right:16px">
+          <li>استخدم أزرار الاتجاه أو أسهم لوحة المفاتيح</li>
+          <li>اسحب على الشاشة (سوايب) للتحكم باللمس</li>
+          <li>كل تفاحة 🍎 تساوي نقاط بحسب مستواك</li>
+          <li>⭐ النجمة الذهبية تساوي 3× النقاط العادية</li>
+          <li>تصطدم بالجدار أو بنفسك؟ انتهت اللعبة!</li>
+          <li>Space = إيقاف مؤقت</li>
+        </ul>
+      </div>
+
+    </div><!-- end snakeSection -->
+
+    <footer class="footer" id="mainFooter">v5.0 — التعبان الكلاسيكي 🐍</footer>
 
   </div><!-- end app-wrapper -->
 
@@ -284,6 +366,8 @@
   <script src="games/sliding-puzzle/game.js"></script>
   <!-- Dama -->
   <script src="games/dama/game.js"></script>
+  <!-- Snake -->
+  <script src="games/snake/game.js"></script>
   <!-- App Boot & Game Switcher -->
   <script src="shared/app.js"></script>
 

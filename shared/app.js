@@ -39,29 +39,42 @@
       document.querySelector('.secondary-controls'),
       document.querySelector('.highscore-panel'),
     ];
-    const damaSection = document.getElementById('damaSection');
+    const damaSection  = document.getElementById('damaSection');
+    const snakeSection = document.getElementById('snakeSection');
     const tabPuzzle = document.getElementById('tabPuzzle');
     const tabDama   = document.getElementById('tabDama');
+    const tabSnake  = document.getElementById('tabSnake');
     const title     = document.getElementById('mainTitle');
     const subtitle  = document.getElementById('mainSubtitle');
     const footer    = document.getElementById('mainFooter');
 
+    // Reset all
+    puzzleEls.forEach(el => { if (el) el.style.display = 'none'; });
+    damaSection.classList.remove('visible');
+    snakeSection.classList.remove('visible');
+    [tabPuzzle, tabDama, tabSnake].forEach(t => { if (t) t.classList.remove('active'); });
+
     if (game === 'puzzle') {
       puzzleEls.forEach(el => { if (el) el.style.display = ''; });
-      damaSection.classList.remove('visible');
       tabPuzzle.classList.add('active');
-      tabDama.classList.remove('active');
-      title.textContent = '🧩 Sliding Puzzle';
+      title.textContent    = '🧩 Sliding Puzzle';
       subtitle.textContent = 'اللغز المنزلق الكلاسيكي';
-      footer.textContent = 'v2.0 — Phase 5: Sound + Ghost + Share ✅';
-    } else {
-      puzzleEls.forEach(el => { if (el) el.style.display = 'none'; });
+      footer.textContent   = 'v2.0 — Phase 5: Sound + Ghost + Share ✅';
+
+    } else if (game === 'dama') {
       damaSection.classList.add('visible');
-      tabPuzzle.classList.remove('active');
       tabDama.classList.add('active');
-      title.textContent = '♟️ الداما المغربية';
+      title.textContent    = '♟️ الداما المغربية';
       subtitle.textContent = 'MOROCCAN CHECKERS';
-      footer.textContent = 'v2.0 — الداما المغربية 🏆';
+      footer.textContent   = 'v2.0 — الداما المغربية 🏆';
       if (!DAMA.initialized) { damaInit(); }
+
+    } else if (game === 'snake') {
+      snakeSection.classList.add('visible');
+      tabSnake.classList.add('active');
+      title.textContent    = '🐍 لعبة التعبان';
+      subtitle.textContent = 'CLASSIC SNAKE';
+      footer.textContent   = 'v5.0 — التعبان الكلاسيكي 🐍';
+      SNAKE.init();
     }
   }
