@@ -85,6 +85,7 @@
 
 /* --- D-Pad (Mobile Controls) --- */
 .snake-dpad {
+  direction: ltr;
   display: grid;
   grid-template-columns: repeat(3, 54px);
   grid-template-rows: repeat(3, 54px);
