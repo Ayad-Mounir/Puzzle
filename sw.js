@@ -1,12 +1,12 @@
 /* ============================================================
-   SERVICE WORKER — v8.0 (Auto-Update)
+   SERVICE WORKER — v8.1 (Auto-Update)
    
    آلية التحديث التلقائي:
    - يستمع لرسالة SKIP_WAITING من العميل
    - فور تنشيطه يُرسل رسالة SW_UPDATED لكل النوافذ
    - العميل (utils.js) يعيد تحميل الصفحة تلقائياً
    ============================================================ */
-const CACHE_NAME = 'puzzle-v11';
+const CACHE_NAME = 'puzzle-v12';
 
 const ASSETS = [
   './',
@@ -27,6 +27,9 @@ const ASSETS = [
   // Dama
   './games/dama/style.css',
   './games/dama/game.js',
+  // Snake
+  './games/snake/style.css',
+  './games/snake/game.js',
 ];
 
 /* INSTALL — cache everything */
