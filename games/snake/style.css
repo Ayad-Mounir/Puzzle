@@ -5,30 +5,32 @@
 /* --- Section Wrapper --- */
 #snakeSection {
   display: none;
+  width: 100%;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
 }
 #snakeSection.visible {
-  display: block;
+  display: flex;
 }
 
 /* --- Stats Bar --- */
 .snake-stats {
-  display: flex;
-  justify-content: center;
-  gap: 12px;
-  margin: 0 auto 12px;
-  max-width: 420px;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+  width: 100%;
 }
 .snake-stat {
-  background: var(--card-bg, #16213e);
-  border: 1px solid var(--border, rgba(255,255,255,0.08));
-  border-radius: 12px;
-  padding: 10px 18px;
+  background: var(--bg-card);
+  border-radius: var(--radius-card);
+  padding: 12px 8px;
   text-align: center;
-  flex: 1;
+  border: 1px solid rgba(255,255,255,0.05);
 }
 .snake-stat-label {
   font-size: 0.72rem;
-  color: var(--text-muted, #8892b0);
+  color: var(--text-muted);
   margin-bottom: 4px;
   font-family: 'Cairo', sans-serif;
 }
@@ -36,49 +38,46 @@
   font-size: 1.4rem;
   font-weight: 700;
   font-family: 'Syne', sans-serif;
-  color: var(--text-primary, #e6f1ff);
+  color: var(--text-primary);
 }
 .snake-stat-value.green  { color: #64ffda; }
-.snake-stat-value.yellow { color: #ffd700; }
+.snake-stat-value.yellow { color: var(--accent-gold); }
 
 /* --- Speed Selector --- */
 .snake-speed {
   display: flex;
-  justify-content: center;
   gap: 8px;
-  margin: 0 auto 12px;
-  max-width: 360px;
+  width: 100%;
 }
 .speed-btn {
   flex: 1;
-  padding: 8px 4px;
-  border: 1px solid var(--border, rgba(255,255,255,0.08));
-  border-radius: 10px;
-  background: transparent;
-  color: var(--text-muted, #8892b0);
+  padding: 9px 4px;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px;
+  background: var(--bg-card);
+  color: var(--text-muted);
   cursor: pointer;
   font-family: 'Cairo', sans-serif;
-  font-size: 0.8rem;
+  font-size: 0.82rem;
   transition: all .2s;
 }
 .speed-btn.active {
-  background: var(--accent, #64ffda);
-  color: #0a0a23;
-  border-color: var(--accent, #64ffda);
+  background: #64ffda;
+  color: #0a0a1f;
+  border-color: #64ffda;
   font-weight: 700;
 }
 
 /* --- Canvas Wrapper --- */
 .snake-board-wrap {
+  width: 100%;
   display: flex;
   justify-content: center;
-  margin: 0 auto 14px;
-  padding: 0 16px;
 }
 #snakeCanvas {
   border-radius: 16px;
-  border: 2px solid var(--border, rgba(255,255,255,0.08));
-  background: #0d1b2a;
+  border: 2px solid rgba(255,255,255,0.08);
+  background: #0a0a1f;
   display: block;
   max-width: 100%;
   touch-action: none;
@@ -87,19 +86,17 @@
 /* --- D-Pad (Mobile Controls) --- */
 .snake-dpad {
   display: grid;
-  grid-template-columns: repeat(3, 52px);
-  grid-template-rows: repeat(3, 52px);
+  grid-template-columns: repeat(3, 54px);
+  grid-template-rows: repeat(3, 54px);
   gap: 6px;
-  justify-content: center;
-  margin: 0 auto 14px;
 }
 .dpad-btn {
-  width: 52px;
-  height: 52px;
+  width: 54px;
+  height: 54px;
   border-radius: 12px;
-  border: 1px solid var(--border, rgba(255,255,255,0.12));
-  background: var(--card-bg, #16213e);
-  color: var(--text-primary, #e6f1ff);
+  border: 1px solid rgba(255,255,255,0.1);
+  background: var(--bg-card);
+  color: var(--text-primary);
   font-size: 1.3rem;
   cursor: pointer;
   display: flex;
@@ -110,11 +107,15 @@
   -webkit-tap-highlight-color: transparent;
 }
 .dpad-btn:active {
-  background: var(--accent, #64ffda);
-  color: #0a0a23;
-  transform: scale(0.92);
+  background: #64ffda;
+  color: #0a0a1f;
+  transform: scale(0.9);
 }
-.dpad-empty { background: transparent; border: none; pointer-events: none; }
+.dpad-empty {
+  background: transparent;
+  border: none;
+  pointer-events: none;
+}
 
 /* --- Actions --- */
 .snake-actions {
@@ -122,8 +123,7 @@
   gap: 10px;
   justify-content: center;
   flex-wrap: wrap;
-  margin: 0 auto 14px;
-  max-width: 420px;
+  width: 100%;
 }
 
 /* --- Game Over Overlay --- */
@@ -140,8 +140,8 @@
   display: flex;
 }
 .snake-overlay-card {
-  background: var(--card-bg, #16213e);
-  border: 1px solid var(--border, rgba(255,255,255,0.1));
+  background: var(--bg-card);
+  border: 1px solid rgba(255,255,255,0.1);
   border-radius: 20px;
   padding: 32px 28px;
   text-align: center;
@@ -158,18 +158,18 @@
   font-size: 1.6rem;
   font-weight: 800;
   font-family: 'Syne', sans-serif;
-  color: var(--text-primary, #e6f1ff);
+  color: var(--text-primary);
   margin-bottom: 4px;
 }
 .snake-overlay-score {
   font-size: 1rem;
-  color: var(--text-muted, #8892b0);
+  color: var(--text-muted);
   font-family: 'Cairo', sans-serif;
   margin-bottom: 6px;
 }
 .snake-overlay-record {
   font-size: 0.9rem;
-  color: #ffd700;
+  color: var(--accent-gold);
   font-family: 'Cairo', sans-serif;
   margin-bottom: 16px;
   min-height: 20px;

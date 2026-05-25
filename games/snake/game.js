@@ -4,22 +4,22 @@
 
 const SNAKE = (() => {
   /* --- Constants --- */
-  const GRID      = 20;          // cells per side
-  const SPEEDS    = { slow: 200, medium: 130, fast: 75 };
+  const GRID   = 20;
+  const SPEEDS = { slow: 200, medium: 130, fast: 75 };
 
   /* --- State --- */
   let canvas, ctx;
-  let cellSize;
-  let snake, dir, nextDir, food, special;
+  let cellSize = 0;
+  let snake = [];           // ← مهيأ مسبقاً لتجنب خطأ forEach
+  let dir, nextDir, food, special;
   let score, bestScore, level;
   let speed = 'medium';
   let loopTimer = null;
-  let running = false;
-  let paused  = false;
+  let running   = false;
+  let paused    = false;
   let initialized = false;
   let touchStartX, touchStartY;
 
-  /* ── DOM refs (resolved lazily) ── */
   const el = id => document.getElementById(id);
 
   /* ─────────────────────────────────
@@ -29,20 +29,23 @@ const SNAKE = (() => {
     if (initialized) return;
     initialized = true;
 
-    canvas   = el('snakeCanvas');
-    ctx      = canvas.getContext('2d');
+    canvas    = el('snakeCanvas');
+    ctx       = canvas.getContext('2d');
     bestScore = +localStorage.getItem('snakeBest') || 0;
-    _updateBest();
 
-    _sizeCanvas();
-    window.addEventListener('resize', _sizeCanvas);
+    // مهم: انتظر reflow قبل قياس الـ canvas
+    requestAnimationFrame(() => {
+      _sizeCanvas();
+      window.addEventListener('resize', _sizeCanvas);
+    });
+
     document.addEventListener('keydown', _onKey);
 
-    // Touch swipe on canvas
     canvas.addEventListener('touchstart', e => {
       touchStartX = e.changedTouches[0].clientX;
       touchStartY = e.changedTouches[0].clientY;
     }, { passive: true });
+
     canvas.addEventListener('touchend', e => {
       const dx = e.changedTouches[0].clientX - touchStartX;
       const dy = e.changedTouches[0].clientY - touchStartY;
@@ -74,7 +77,16 @@ const SNAKE = (() => {
     _hideOverlay();
     _placeFood();
     _updateStats();
-    _startLoop();
+
+    const btn = el('snakePauseBtn');
+    if (btn) btn.textContent = '⏸ إيقاف';
+
+    // اعطِ المتصفح فرصة لعرض الـ canvas قبل بدء اللعبة
+    requestAnimationFrame(() => {
+      if (cellSize <= 0) _sizeCanvas();
+      _draw();
+      _startLoop();
+    });
   }
 
   /* ─────────────────────────────────
@@ -85,10 +97,7 @@ const SNAKE = (() => {
     document.querySelectorAll('.speed-btn').forEach(b => {
       b.classList.toggle('active', b.dataset.speed === s);
     });
-    if (running && !paused) {
-      _stopLoop();
-      _startLoop();
-    }
+    if (running && !paused) { _stopLoop(); _startLoop(); }
   }
 
   /* ─────────────────────────────────
@@ -99,12 +108,8 @@ const SNAKE = (() => {
     paused = !paused;
     const btn = el('snakePauseBtn');
     if (btn) btn.textContent = paused ? '▶ استئناف' : '⏸ إيقاف';
-    if (paused) {
-      _stopLoop();
-      _drawPaused();
-    } else {
-      _startLoop();
-    }
+    if (paused) { _stopLoop(); _drawPaused(); }
+    else        { _startLoop(); }
   }
 
   /* ─────────────────────────────────
@@ -113,7 +118,7 @@ const SNAKE = (() => {
   function dpad(d) { _tryDir(d); }
 
   /* ─────────────────────────────────
-     PRIVATE — GAME LOOP
+     GAME LOOP
   ───────────────────────────────── */
   function _startLoop() {
     _stopLoop();
@@ -127,19 +132,16 @@ const SNAKE = (() => {
     dir = { ...nextDir };
     const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
 
-    // Wall collision
     if (head.x < 0 || head.x >= GRID || head.y < 0 || head.y >= GRID) {
       return _gameOver();
     }
-    // Self collision
     if (snake.some(s => s.x === head.x && s.y === head.y)) {
       return _gameOver();
     }
 
     snake.unshift(head);
 
-    // Eat food
-    if (head.x === food.x && head.y === food.y) {
+    if (food && head.x === food.x && head.y === food.y) {
       score += level;
       if (score > bestScore) {
         bestScore = score;
@@ -149,10 +151,6 @@ const SNAKE = (() => {
       level = Math.floor(score / 5) + 1;
       _placeFood();
       _updateStats();
-      // Speed boost every 5 levels
-      if (level % 5 === 0 && speed === 'medium') {
-        _stopLoop(); _startLoop();
-      }
     } else if (special && head.x === special.x && head.y === special.y) {
       score += level * 3;
       if (score > bestScore) {
@@ -166,20 +164,20 @@ const SNAKE = (() => {
       snake.pop();
     }
 
-    // Randomly spawn special food
     if (!special && Math.random() < 0.003) _placeSpecial();
-
     _draw();
   }
 
   /* ─────────────────────────────────
-     PRIVATE — DRAWING
+     DRAWING
   ───────────────────────────────── */
   function _draw() {
+    if (!ctx || cellSize <= 0 || !snake.length) return;
     const cs = cellSize;
+
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Grid dots
+    // نقاط الشبكة
     ctx.fillStyle = 'rgba(255,255,255,0.04)';
     for (let x = 0; x < GRID; x++) {
       for (let y = 0; y < GRID; y++) {
@@ -189,26 +187,23 @@ const SNAKE = (() => {
       }
     }
 
-    // Snake body
+    // جسم التعبان
     snake.forEach((seg, i) => {
-      const t = i / snake.length;
-      const r = cs - 4;
+      const t  = i / snake.length;
+      const r  = cs - 4;
       const ox = seg.x * cs + 2;
       const oy = seg.y * cs + 2;
-      const radius = i === 0 ? 8 : 5;
 
-      // Gradient from head (bright green) to tail (dark)
-      const alpha = 1 - t * 0.5;
       ctx.fillStyle = i === 0
         ? '#64ffda'
-        : `rgba(50,${Math.floor(200 - t * 100)},${Math.floor(150 - t * 80)},${alpha})`;
+        : `rgba(50,${Math.floor(200 - t * 100)},${Math.floor(150 - t * 80)},${1 - t * 0.5})`;
 
-      _roundRect(ox, oy, r, r, radius);
+      _roundRect(ox, oy, r, r, i === 0 ? 8 : 5);
       ctx.fill();
 
-      // Eyes on head
+      // عيون الرأس
       if (i === 0) {
-        ctx.fillStyle = '#0a0a23';
+        ctx.fillStyle = '#0a0a1f';
         const ex1 = ox + (dir.x === 0 ? r * 0.3 : dir.x > 0 ? r * 0.65 : r * 0.15);
         const ey1 = oy + (dir.y === 0 ? r * 0.25 : dir.y > 0 ? r * 0.65 : r * 0.15);
         const ex2 = ox + (dir.x === 0 ? r * 0.65 : dir.x > 0 ? r * 0.65 : r * 0.15);
@@ -218,28 +213,26 @@ const SNAKE = (() => {
       }
     });
 
-    // Food (apple)
+    // طعام (تفاحة)
     if (food) {
       const fx = food.x * cs + cs / 2;
       const fy = food.y * cs + cs / 2;
-      const pulse = 1 + 0.12 * Math.sin(Date.now() / 200);
+      const pulse = 1 + 0.1 * Math.sin(Date.now() / 200);
       const fr = (cs / 2 - 4) * pulse;
       ctx.fillStyle = '#ff6b6b';
       ctx.beginPath(); ctx.arc(fx, fy, fr, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = '#c0392b';
       ctx.beginPath(); ctx.arc(fx - fr * 0.25, fy - fr * 0.25, fr * 0.35, 0, Math.PI * 2); ctx.fill();
-      // Stem
       ctx.strokeStyle = '#27ae60';
       ctx.lineWidth = 2;
       ctx.beginPath(); ctx.moveTo(fx, fy - fr); ctx.lineTo(fx + 4, fy - fr - 5); ctx.stroke();
     }
 
-    // Special food (star ⭐)
+    // طعام مميز (نجمة)
     if (special) {
       const sx = special.x * cs + cs / 2;
       const sy = special.y * cs + cs / 2;
-      ctx.fillStyle = '#ffd700';
-      ctx.font = `${cs - 4}px serif`;
+      ctx.font = `${Math.max(cs - 4, 12)}px serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText('⭐', sx, sy);
@@ -248,10 +241,11 @@ const SNAKE = (() => {
 
   function _drawPaused() {
     _draw();
+    if (!ctx) return;
     ctx.fillStyle = 'rgba(0,0,0,0.5)';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = '#e6f1ff';
-    ctx.font = 'bold 28px Syne, sans-serif';
+    ctx.fillStyle = '#e8e8ff';
+    ctx.font = 'bold 26px Syne, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText('⏸  موقوف', canvas.width / 2, canvas.height / 2);
@@ -272,7 +266,7 @@ const SNAKE = (() => {
   }
 
   /* ─────────────────────────────────
-     PRIVATE — FOOD
+     FOOD
   ───────────────────────────────── */
   function _placeFood() {
     let pos;
@@ -286,21 +280,22 @@ const SNAKE = (() => {
     let pos;
     do {
       pos = { x: Math.floor(Math.random() * GRID), y: Math.floor(Math.random() * GRID) };
-    } while (snake.some(s => s.x === pos.x && s.y === pos.y) || (food && pos.x === food.x && pos.y === food.y));
+    } while (
+      snake.some(s => s.x === pos.x && s.y === pos.y) ||
+      (food && pos.x === food.x && pos.y === food.y)
+    );
     special = pos;
-    // Remove special after 5 seconds
     setTimeout(() => { special = null; }, 5000);
   }
 
   /* ─────────────────────────────────
-     PRIVATE — DIRECTION
+     DIRECTION
   ───────────────────────────────── */
   function _tryDir(d) {
     if (!running || paused) return;
-    const map = { U: {x:0,y:-1}, D: {x:0,y:1}, L: {x:-1,y:0}, R: {x:1,y:0} };
+    const map = { U:{x:0,y:-1}, D:{x:0,y:1}, L:{x:-1,y:0}, R:{x:1,y:0} };
     const nd = map[d];
     if (!nd) return;
-    // Prevent 180° reversal
     if (nd.x === -dir.x && nd.y === -dir.y) return;
     nextDir = nd;
   }
@@ -308,39 +303,39 @@ const SNAKE = (() => {
   function _onKey(e) {
     const map = {
       ArrowUp:'U', ArrowDown:'D', ArrowLeft:'L', ArrowRight:'R',
-      w:'U', s:'D', a:'L', d:'R',
-      W:'U', S:'D', A:'L', D:'R',
+      w:'U', s:'D', a:'L', d:'R', W:'U', S:'D', A:'L', D:'R',
     };
     if (map[e.key]) { e.preventDefault(); _tryDir(map[e.key]); }
     if (e.key === ' ') { e.preventDefault(); togglePause(); }
   }
 
   /* ─────────────────────────────────
-     PRIVATE — CANVAS SIZE
+     CANVAS SIZING
   ───────────────────────────────── */
   function _sizeCanvas() {
+    if (!canvas) return;
     const wrap = document.querySelector('.snake-board-wrap');
     if (!wrap) return;
-    const maxW = Math.min(wrap.clientWidth - 32, 420);
-    const size = Math.floor(maxW / GRID) * GRID;
+    const available = wrap.clientWidth || wrap.offsetWidth || 360;
+    const maxW = Math.min(available - 8, 420);
+    const size = Math.max(Math.floor(maxW / GRID) * GRID, GRID * 10);
     cellSize = size / GRID;
     canvas.width  = size;
     canvas.height = size;
-    if (!running || paused) _draw();
+    if (running && !paused) _draw();
   }
 
   /* ─────────────────────────────────
-     PRIVATE — GAME OVER
+     GAME OVER
   ───────────────────────────────── */
   function _gameOver() {
     running = false;
     _stopLoop();
-    _draw();
 
     const isRecord = score > 0 && score >= bestScore;
-    el('snakeOverlayScore').textContent  = `النقاط: ${score}`;
-    el('snakeOverlayRecord').textContent = isRecord ? '🏆 رقم قياسي جديد!' : '';
-    el('snakeOverlay').classList.add('visible');
+    const sc = el('snakeOverlayScore');  if (sc) sc.textContent = `النقاط: ${score}`;
+    const rc = el('snakeOverlayRecord'); if (rc) rc.textContent = isRecord ? '🏆 رقم قياسي جديد!' : '';
+    const ov = el('snakeOverlay');       if (ov) ov.classList.add('visible');
   }
 
   function _hideOverlay() {
@@ -349,7 +344,7 @@ const SNAKE = (() => {
   }
 
   /* ─────────────────────────────────
-     PRIVATE — STATS
+     STATS
   ───────────────────────────────── */
   function _updateStats() {
     const sc = el('snakeScore'); if (sc) sc.textContent = score;
