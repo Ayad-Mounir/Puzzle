@@ -10,13 +10,14 @@ const SNAKE = (() => {
   /* --- State --- */
   let canvas, ctx;
   let cellSize = 0;
-  let snake = [];           // ← مهيأ مسبقاً لتجنب خطأ forEach
+  let snake = [];
   let dir, nextDir, food, special;
   let score, bestScore, level;
   let speed = 'medium';
   let loopTimer = null;
   let running   = false;
   let paused    = false;
+  let waiting   = true;   // ← شاشة الانتظار قبل البدء
   let initialized = false;
   let touchStartX, touchStartY;
 
@@ -26,14 +27,17 @@ const SNAKE = (() => {
      PUBLIC INIT
   ───────────────────────────────── */
   function init() {
-    if (initialized) return;
+    if (initialized) {
+      // العودة للعبة: إذا كانت منتظرة — أعد رسم شاشة البدء
+      if (waiting) { requestAnimationFrame(_drawReady); }
+      return;
+    }
     initialized = true;
 
     canvas    = el('snakeCanvas');
     ctx       = canvas.getContext('2d');
     bestScore = +localStorage.getItem('snakeBest') || 0;
 
-    // مهم: انتظر reflow قبل قياس الـ canvas
     requestAnimationFrame(() => {
       _sizeCanvas();
       window.addEventListener('resize', _sizeCanvas);
@@ -44,11 +48,17 @@ const SNAKE = (() => {
     canvas.addEventListener('touchstart', e => {
       touchStartX = e.changedTouches[0].clientX;
       touchStartY = e.changedTouches[0].clientY;
-    }, { passive: true });
+      // نقرة بدون سحب → ابدأ اللعبة إذا كانت في وضع الانتظار
+      if (waiting) { e.preventDefault(); }
+    }, { passive: false });
 
     canvas.addEventListener('touchend', e => {
       const dx = e.changedTouches[0].clientX - touchStartX;
       const dy = e.changedTouches[0].clientY - touchStartY;
+      if (Math.abs(dx) < 10 && Math.abs(dy) < 10) {
+        // نقرة بسيطة على الـ canvas
+        if (waiting) { _startFromWait(); return; }
+      }
       if (Math.abs(dx) > Math.abs(dy)) {
         _tryDir(dx > 0 ? 'R' : 'L');
       } else {
@@ -71,8 +81,9 @@ const SNAKE = (() => {
     level   = 1;
     food    = null;
     special = null;
-    running = true;
+    running = false;
     paused  = false;
+    waiting = true;    // ← وضع الانتظار
 
     _hideOverlay();
     _placeFood();
@@ -81,12 +92,21 @@ const SNAKE = (() => {
     const btn = el('snakePauseBtn');
     if (btn) btn.textContent = '⏸ إيقاف';
 
-    // اعطِ المتصفح فرصة لعرض الـ canvas قبل بدء اللعبة
     requestAnimationFrame(() => {
       if (cellSize <= 0) _sizeCanvas();
-      _draw();
-      _startLoop();
+      _drawReady();   // ← شاشة البدء
     });
+  }
+
+  /* ─────────────────────────────────
+     START FROM WAIT
+  ───────────────────────────────── */
+  function _startFromWait() {
+    if (!waiting) return;
+    waiting = false;
+    running = true;
+    _draw();
+    _startLoop();
   }
 
   /* ─────────────────────────────────
@@ -104,7 +124,7 @@ const SNAKE = (() => {
      PAUSE / RESUME
   ───────────────────────────────── */
   function togglePause() {
-    if (!running) return;
+    if (!running || waiting) return;
     paused = !paused;
     const btn = el('snakePauseBtn');
     if (btn) btn.textContent = paused ? '▶ استئناف' : '⏸ إيقاف';
@@ -115,7 +135,10 @@ const SNAKE = (() => {
   /* ─────────────────────────────────
      D-PAD
   ───────────────────────────────── */
-  function dpad(d) { _tryDir(d); }
+  function dpad(d) {
+    if (waiting) { _startFromWait(); }
+    _tryDir(d);
+  }
 
   /* ─────────────────────────────────
      GAME LOOP
@@ -201,7 +224,6 @@ const SNAKE = (() => {
       _roundRect(ox, oy, r, r, i === 0 ? 8 : 5);
       ctx.fill();
 
-      // عيون الرأس
       if (i === 0) {
         ctx.fillStyle = '#0a0a1f';
         const ex1 = ox + (dir.x === 0 ? r * 0.3 : dir.x > 0 ? r * 0.65 : r * 0.15);
@@ -237,6 +259,37 @@ const SNAKE = (() => {
       ctx.textBaseline = 'middle';
       ctx.fillText('⭐', sx, sy);
     }
+  }
+
+  /* ─────────────────────────────────
+     READY SCREEN
+  ───────────────────────────────── */
+  function _drawReady() {
+    if (!ctx || cellSize <= 0) return;
+    _draw();  // ارسم اللعبة في الخلفية (ثابتة)
+
+    // طبقة شفافة
+    ctx.fillStyle = 'rgba(10,10,31,0.78)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    const cx = canvas.width  / 2;
+    const cy = canvas.height / 2;
+
+    // أيقونة التعبان
+    ctx.font = `${Math.round(canvas.width * 0.18)}px serif`;
+    ctx.textAlign    = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('🐍', cx, cy - canvas.height * 0.13);
+
+    // عنوان
+    ctx.fillStyle = '#64ffda';
+    ctx.font = `bold ${Math.round(canvas.width * 0.072)}px Syne, sans-serif`;
+    ctx.fillText('التعبان الكلاسيكي', cx, cy + canvas.height * 0.04);
+
+    // تعليمة
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    ctx.font = `${Math.round(canvas.width * 0.054)}px Cairo, sans-serif`;
+    ctx.fillText('اضغط أي زر أو المس الشاشة للبدء', cx, cy + canvas.height * 0.14);
   }
 
   function _drawPaused() {
@@ -305,7 +358,11 @@ const SNAKE = (() => {
       ArrowUp:'U', ArrowDown:'D', ArrowLeft:'L', ArrowRight:'R',
       w:'U', s:'D', a:'L', d:'R', W:'U', S:'D', A:'L', D:'R',
     };
-    if (map[e.key]) { e.preventDefault(); _tryDir(map[e.key]); }
+    if (map[e.key]) {
+      e.preventDefault();
+      if (waiting) { _startFromWait(); }
+      _tryDir(map[e.key]);
+    }
     if (e.key === ' ') { e.preventDefault(); togglePause(); }
   }
 
@@ -322,7 +379,9 @@ const SNAKE = (() => {
     cellSize = size / GRID;
     canvas.width  = size;
     canvas.height = size;
-    if (running && !paused) _draw();
+    if (waiting)         { _drawReady(); }
+    else if (paused)     { _drawPaused(); }
+    else if (running)    { _draw(); }
   }
 
   /* ─────────────────────────────────
