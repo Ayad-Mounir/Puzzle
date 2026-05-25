@@ -78,15 +78,16 @@
 
     .dama-board {
       width: 100%;
+      aspect-ratio: 1;
       display: grid;
       grid-template-columns: repeat(8, 1fr);
+      grid-template-rows: repeat(8, 1fr);
       gap: 2px;
       border-radius: 10px;
       overflow: hidden;
     }
 
     .dama-cell {
-      aspect-ratio: 1;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -296,3 +297,4 @@
       background: var(--accent-violet);
       animation: pulse 1s infinite;
     }
+
