@@ -6,7 +6,7 @@
    - فور تنشيطه يُرسل رسالة SW_UPDATED لكل النوافذ
    - العميل (utils.js) يعيد تحميل الصفحة تلقائياً
    ============================================================ */
-const CACHE_NAME = 'puzzle-v16';
+const CACHE_NAME = 'puzzle-v17';
 
 const ASSETS = [
   './',
@@ -30,6 +30,9 @@ const ASSETS = [
   // Snake
   './games/snake/style.css',
   './games/snake/game.js',
+  // Memory
+  './games/memory/style.css',
+  './games/memory/game.js',
 ];
 
 /* INSTALL — cache everything */
