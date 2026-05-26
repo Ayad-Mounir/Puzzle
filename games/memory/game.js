@@ -85,6 +85,7 @@ const MEMORY = (() => {
   function _onCardClick(i) {
     const card = cards[i];
     if (locked) return;
+    if (flipped.length >= 2) return;
     if (card.el.classList.contains('flipped')) return;
     if (card.el.classList.contains('matched')) return;
 
@@ -94,14 +95,14 @@ const MEMORY = (() => {
       timer = setInterval(() => { seconds++; _updateTimer(); }, 1000);
     }
 
-    card.el.classList.add('flipped');
-    AUDIO.play('move');
     flipped.push(i);
+    card.el.classList.add('flipped');
+    AUDIO.playTick();
 
     if (flipped.length === 2) {
+      locked = true;
       moves++;
       _updateMoves();
-      locked = true;
       _checkMatch();
     }
   }
@@ -114,7 +115,7 @@ const MEMORY = (() => {
       setTimeout(() => {
         cards[a].el.classList.add('matched');
         cards[b].el.classList.add('matched');
-        AUDIO.play('win');
+        AUDIO.playWin();
         flipped = [];
         locked  = false;
         matched++;
