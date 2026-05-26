@@ -40,6 +40,7 @@
   <link rel="stylesheet" href="games/sliding-puzzle/style.css" />
   <link rel="stylesheet" href="games/dama/style.css" />
   <link rel="stylesheet" href="games/snake/style.css" />
+  <link rel="stylesheet" href="games/memory/style.css" />
 </head>
 
 <body>
@@ -120,6 +121,7 @@
       <button class="game-tab active" id="tabPuzzle" onclick="switchGame('puzzle')">🧩 اللغز المنزلق</button>
       <button class="game-tab" id="tabDama"   onclick="switchGame('dama')">♟️ الداما المغربية</button>
       <button class="game-tab" id="tabSnake"  onclick="switchGame('snake')">🐍 التعبان</button>
+      <button class="game-tab" id="tabMemory" onclick="switchGame('memory')">🎴 الذاكرة</button>
     </div>
 
     <!-- Install Banner -->
@@ -370,6 +372,73 @@
 
     </div><!-- end snakeSection -->
 
+    <!-- ============================================================
+         MEMORY SECTION — لعبة الذاكرة
+    ============================================================ -->
+    <div id="memorySection">
+
+      <!-- Stats -->
+      <div class="mem-stats">
+        <div class="mem-stat">
+          <div class="mem-stat-label">الوقت</div>
+          <div class="mem-stat-value" id="memTimer">0:00</div>
+        </div>
+        <div class="mem-stat">
+          <div class="mem-stat-label">الحركات</div>
+          <div class="mem-stat-value" id="memMoves">0</div>
+        </div>
+        <div class="mem-stat">
+          <div class="mem-stat-label">الأزواج</div>
+          <div class="mem-stat-value" id="memPairs">0 / 8</div>
+        </div>
+        <div class="mem-stat">
+          <div class="mem-stat-label">أفضل</div>
+          <div class="mem-stat-value highlight" id="memBest">—</div>
+        </div>
+      </div>
+
+      <!-- Difficulty -->
+      <div class="mem-difficulty">
+        <button class="mem-diff-btn active" id="memDiff4">4×4 سهل</button>
+        <button class="mem-diff-btn"        id="memDiff6">6×6 صعب</button>
+      </div>
+
+      <!-- Board -->
+      <div class="mem-board-wrap">
+        <div class="mem-board grid-4" id="memBoard"></div>
+      </div>
+
+      <!-- Actions -->
+      <div class="mem-actions">
+        <button class="btn btn-primary" id="memNewBtn">🔀 لعبة جديدة</button>
+      </div>
+
+    </div><!-- end memorySection -->
+
+    <!-- Win Overlay — Memory -->
+    <div class="mem-win-overlay" id="memWinOverlay">
+      <div class="mem-win-card">
+        <div class="mem-win-emoji">🎉</div>
+        <div class="mem-win-title">أحسنت!</div>
+        <div class="mem-win-sub">وجدت كل الأزواج</div>
+        <div class="mem-win-stats">
+          <div class="mem-win-stat">
+            <div class="mem-win-stat-label">الوقت</div>
+            <div class="mem-win-stat-value" id="memWinTime">0:00</div>
+          </div>
+          <div class="mem-win-stat">
+            <div class="mem-win-stat-label">الحركات</div>
+            <div class="mem-win-stat-value" id="memWinMoves">0</div>
+          </div>
+        </div>
+        <div class="mem-record-badge" id="memRecordBadge">⭐ رقم قياسي جديد!</div>
+        <div class="mem-win-btns">
+          <button class="btn btn-secondary" id="memWinClose">✕ إغلاق</button>
+          <button class="btn btn-primary"   id="memWinNew">🔄 مجدداً</button>
+        </div>
+      </div>
+    </div>
+
     <footer class="footer" id="mainFooter">v5.0 — التعبان الكلاسيكي 🐍</footer>
 
   </div><!-- end app-wrapper -->
@@ -386,6 +455,8 @@
   <script src="games/dama/game.js"></script>
   <!-- Snake -->
   <script src="games/snake/game.js"></script>
+  <!-- Memory -->
+  <script src="games/memory/game.js"></script>
   <!-- App Boot & Game Switcher -->
   <script src="shared/app.js"></script>
 
