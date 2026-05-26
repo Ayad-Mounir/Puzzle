@@ -170,22 +170,28 @@
       padding: 5px;
       border: 1px solid rgba(255,255,255,0.08);
       box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+      overflow-x: auto;
+      scroll-snap-type: x mandatory;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
     }
+    .game-selector::-webkit-scrollbar { display: none; }
 
     .game-tab {
-      flex: 1;
-      padding: 10px 8px;
+      flex: 0 0 auto;
+      padding: 10px 16px;
       border-radius: 50px;
       border: none;
       cursor: pointer;
       font-family: 'Cairo', sans-serif;
-      font-size: 0.85rem;
+      font-size: 0.82rem;
       font-weight: 700;
       color: var(--text-muted);
       background: transparent;
       transition: all 220ms ease;
       white-space: nowrap;
       letter-spacing: 0.3px;
+      scroll-snap-align: start;
     }
 
     .game-tab.active {
