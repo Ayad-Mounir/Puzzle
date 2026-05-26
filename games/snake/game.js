@@ -77,8 +77,8 @@ const SNAKE = (() => {
     // D-pad buttons
     el('s-btn-up')   .addEventListener('touchstart', e => { e.preventDefault(); _dpadMove(0,-1); }, { passive: false });
     el('s-btn-down') .addEventListener('touchstart', e => { e.preventDefault(); _dpadMove(0,1);  }, { passive: false });
-    el('s-btn-left') .addEventListener('touchstart', e => { e.preventDefault(); _dpadMove(-1,0); }, { passive: false });
-    el('s-btn-right').addEventListener('touchstart', e => { e.preventDefault(); _dpadMove(1,0);  }, { passive: false });
+    el('s-btn-left') .addEventListener('touchstart', e => { e.preventDefault(); _dpadMove(1,0);  }, { passive: false });
+    el('s-btn-right').addEventListener('touchstart', e => { e.preventDefault(); _dpadMove(-1,0); }, { passive: false });
 
     // Overlay buttons
     el('snakeOvStartBtn') .addEventListener('click', () => { _ac().resume(); newGame(); });
