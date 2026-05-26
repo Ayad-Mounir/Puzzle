@@ -1,421 +1,390 @@
 /* ============================================================
-   SNAKE GAME — Classic Snake
+   SNAKE RETRO — Ported from Snake-Game-Classic
+   CRT Green Style — Classic Gameplay
    ============================================================ */
 
 const SNAKE = (() => {
-  /* --- Constants --- */
-  const GRID   = 20;
-  const SPEEDS = { slow: 200, medium: 130, fast: 75 };
 
-  /* --- State --- */
+  const COLS = 20, ROWS = 20, CELL = 20;
+  const SPEEDS = { slow: 200, medium: 140, fast: 75 };
+
   let canvas, ctx;
-  let cellSize = 0;
-  let snake = [];
-  let dir, nextDir, food, special;
-  let score, bestScore, level;
-  let speed = 'medium';
-  let loopTimer = null;
-  let running   = false;
-  let paused    = false;
-  let waiting   = true;   // ← شاشة الانتظار قبل البدء
+  let snake, dir, nextDir, food;
+  let score, level, hiScore;
+  let speed    = 'medium';
+  let state    = 'idle'; // idle | playing | paused | over
+  let loopId   = null;
+  let animId   = null;
+  let foodBeat = 0;
+  let deathParts = [];
   let initialized = false;
-  let touchStartX, touchStartY;
+  let tx = 0, ty = 0;
 
   const el = id => document.getElementById(id);
 
-  /* ─────────────────────────────────
-     PUBLIC INIT
-  ───────────────────────────────── */
+  /* ── Audio ── */
+  let ac;
+  function _ac() {
+    if (!ac) ac = new (window.AudioContext || window.webkitAudioContext)();
+    return ac;
+  }
+  function beep(freq, dur, type = 'square', vol = 0.12) {
+    try {
+      const a = _ac();
+      const o = a.createOscillator();
+      const g = a.createGain();
+      o.connect(g); g.connect(a.destination);
+      o.type = type; o.frequency.value = freq;
+      g.gain.setValueAtTime(vol, a.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.001, a.currentTime + dur);
+      o.start(); o.stop(a.currentTime + dur);
+    } catch(_) {}
+  }
+  const playEat   = () => { beep(660,.08); beep(880,.06); };
+  const playDie   = () => { beep(200,.05); beep(150,.1); beep(100,.2); };
+  const playLevel = () => { beep(523,.1); beep(659,.1); beep(784,.15); };
+  const playPause = () => beep(440,.08,'sine');
+
+  /* ── PUBLIC INIT ── */
   function init() {
-    if (initialized) {
-      // العودة للعبة: إذا كانت منتظرة — أعد رسم شاشة البدء
-      if (waiting) { requestAnimationFrame(_drawReady); }
-      return;
-    }
+    if (initialized) return;
     initialized = true;
 
-    canvas    = el('snakeCanvas');
-    ctx       = canvas.getContext('2d');
-    bestScore = +localStorage.getItem('snakeBest') || 0;
+    canvas = el('snakeCanvas');
+    ctx    = canvas.getContext('2d');
+    hiScore = +localStorage.getItem('snakeRetroHi') || 0;
 
-    requestAnimationFrame(() => {
-      _sizeCanvas();
-      window.addEventListener('resize', _sizeCanvas);
-    });
+    _sizeCanvas();
+    window.addEventListener('resize', _sizeCanvas);
 
+    // Keyboard
     document.addEventListener('keydown', _onKey);
 
-    canvas.addEventListener('touchstart', e => {
-      touchStartX = e.changedTouches[0].clientX;
-      touchStartY = e.changedTouches[0].clientY;
-      // نقرة بدون سحب → ابدأ اللعبة إذا كانت في وضع الانتظار
-      if (waiting) { e.preventDefault(); }
-    }, { passive: false });
-
-    canvas.addEventListener('touchend', e => {
-      const dx = e.changedTouches[0].clientX - touchStartX;
-      const dy = e.changedTouches[0].clientY - touchStartY;
-      if (Math.abs(dx) < 10 && Math.abs(dy) < 10) {
-        // نقرة بسيطة على الـ canvas
-        if (waiting) { _startFromWait(); return; }
-      }
-      if (Math.abs(dx) > Math.abs(dy)) {
-        _tryDir(dx > 0 ? 'R' : 'L');
-      } else {
-        _tryDir(dy > 0 ? 'D' : 'U');
-      }
+    // Swipe
+    document.addEventListener('touchstart', e => {
+      tx = e.touches[0].clientX;
+      ty = e.touches[0].clientY;
+    }, { passive: true });
+    document.addEventListener('touchend', e => {
+      if (state !== 'playing') return;
+      const dx = e.changedTouches[0].clientX - tx;
+      const dy = e.changedTouches[0].clientY - ty;
+      if (Math.abs(dx) < 20 && Math.abs(dy) < 20) return;
+      if (Math.abs(dx) > Math.abs(dy)) { _dpadMove(dx > 0 ? 1 : -1, 0); }
+      else { _dpadMove(0, dy > 0 ? 1 : -1); }
     }, { passive: true });
 
-    newGame();
+    // D-pad buttons
+    el('s-btn-up')   .addEventListener('touchstart', e => { e.preventDefault(); _dpadMove(0,-1); }, { passive: false });
+    el('s-btn-down') .addEventListener('touchstart', e => { e.preventDefault(); _dpadMove(0,1);  }, { passive: false });
+    el('s-btn-left') .addEventListener('touchstart', e => { e.preventDefault(); _dpadMove(-1,0); }, { passive: false });
+    el('s-btn-right').addEventListener('touchstart', e => { e.preventDefault(); _dpadMove(1,0);  }, { passive: false });
+
+    // Overlay buttons
+    el('snakeOvStartBtn') .addEventListener('click', () => { _ac().resume(); newGame(); });
+    el('snakeOvResumeBtn').addEventListener('click', () => { _resumeGame(); });
+    el('snakeOvRetryBtn') .addEventListener('click', () => { _ac().resume(); newGame(); });
+
+    // Start RAF loop
+    animId = requestAnimationFrame(_render);
+
+    _showOv('snakeOvStart');
   }
 
-  /* ─────────────────────────────────
-     NEW GAME
-  ───────────────────────────────── */
+  /* ── NEW GAME ── */
   function newGame() {
-    _stopLoop();
-    snake   = [{ x: 10, y: 10 }, { x: 9, y: 10 }, { x: 8, y: 10 }];
-    dir     = { x: 1, y: 0 };
-    nextDir = { x: 1, y: 0 };
-    score   = 0;
-    level   = 1;
-    food    = null;
-    special = null;
-    running = false;
-    paused  = false;
-    waiting = true;    // ← وضع الانتظار
+    _clearLoop();
+    snake      = [{ x:10, y:10 }, { x:9, y:10 }, { x:8, y:10 }];
+    dir        = { x:1, y:0 };
+    nextDir    = { x:1, y:0 };
+    food       = _spawnFood();
+    score      = 0;
+    level      = 1;
+    foodBeat   = 0;
+    deathParts = [];
+    state      = 'playing';
 
-    _hideOverlay();
-    _placeFood();
-    _updateStats();
-
-    const btn = el('snakePauseBtn');
-    if (btn) btn.textContent = '⏸ إيقاف';
-
-    requestAnimationFrame(() => {
-      if (cellSize <= 0) _sizeCanvas();
-      _drawReady();   // ← شاشة البدء
-    });
+    _hideAllOv();
+    _updateHud();
+    loopId = setInterval(_tick, SPEEDS[speed]);
   }
 
-  /* ─────────────────────────────────
-     START FROM WAIT
-  ───────────────────────────────── */
-  function _startFromWait() {
-    if (!waiting) return;
-    waiting = false;
-    running = true;
-    _draw();
-    _startLoop();
-  }
-
-  /* ─────────────────────────────────
-     SPEED
-  ───────────────────────────────── */
+  /* ── SPEED ── */
   function setSpeed(s) {
     speed = s;
     document.querySelectorAll('.speed-btn').forEach(b => {
       b.classList.toggle('active', b.dataset.speed === s);
     });
-    if (running && !paused) { _stopLoop(); _startLoop(); }
+    if (state === 'playing') { _clearLoop(); loopId = setInterval(_tick, SPEEDS[speed]); }
   }
 
-  /* ─────────────────────────────────
-     PAUSE / RESUME
-  ───────────────────────────────── */
-  function togglePause() {
-    if (!running || waiting) return;
-    paused = !paused;
-    const btn = el('snakePauseBtn');
-    if (btn) btn.textContent = paused ? '▶ استئناف' : '⏸ إيقاف';
-    if (paused) { _stopLoop(); _drawPaused(); }
-    else        { _startLoop(); }
-  }
-
-  /* ─────────────────────────────────
-     D-PAD
-  ───────────────────────────────── */
-  function dpad(d) {
-    if (waiting) { _startFromWait(); }
-    _tryDir(d);
-  }
-
-  /* ─────────────────────────────────
-     GAME LOOP
-  ───────────────────────────────── */
-  function _startLoop() {
-    _stopLoop();
-    loopTimer = setInterval(_tick, SPEEDS[speed]);
-  }
-  function _stopLoop() {
-    if (loopTimer) { clearInterval(loopTimer); loopTimer = null; }
-  }
-
+  /* ── TICK ── */
   function _tick() {
+    if (state !== 'playing') return;
     dir = { ...nextDir };
     const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
 
-    if (head.x < 0 || head.x >= GRID || head.y < 0 || head.y >= GRID) {
-      return _gameOver();
+    if (head.x < 0 || head.x >= COLS || head.y < 0 || head.y >= ROWS) {
+      return _endGame();
     }
     if (snake.some(s => s.x === head.x && s.y === head.y)) {
-      return _gameOver();
+      return _endGame();
     }
 
     snake.unshift(head);
 
-    if (food && head.x === food.x && head.y === food.y) {
-      score += level;
-      if (score > bestScore) {
-        bestScore = score;
-        localStorage.setItem('snakeBest', bestScore);
-        _updateBest();
+    if (head.x === food.x && head.y === food.y) {
+      score += level * 10;
+      if (score > hiScore) {
+        hiScore = score;
+        localStorage.setItem('snakeRetroHi', hiScore);
       }
-      level = Math.floor(score / 5) + 1;
-      _placeFood();
-      _updateStats();
-    } else if (special && head.x === special.x && head.y === special.y) {
-      score += level * 3;
-      if (score > bestScore) {
-        bestScore = score;
-        localStorage.setItem('snakeBest', bestScore);
-        _updateBest();
+      food = _spawnFood();
+      playEat();
+
+      if (snake.length % 5 === 0) {
+        level++;
+        _clearLoop();
+        loopId = setInterval(_tick, Math.max(70, SPEEDS[speed] - (level-1)*8));
+        playLevel();
+        _showFlash('LEVEL ' + level);
       }
-      special = null;
-      _updateStats();
+      _updateHud();
     } else {
       snake.pop();
     }
+  }
 
-    if (!special && Math.random() < 0.003) _placeSpecial();
+  /* ── END GAME ── */
+  function _endGame() {
+    state = 'over';
+    playDie();
+    _clearLoop();
+
+    // Particles
+    const hx = snake[0].x * CELL + CELL / 2;
+    const hy = snake[0].y * CELL + CELL / 2;
+    for (let i = 0; i < 24; i++) {
+      const ang = (Math.PI * 2 * i) / 24 + Math.random() * 0.4;
+      const spd = 1.5 + Math.random() * 3;
+      deathParts.push({
+        x: hx, y: hy,
+        vx: Math.cos(ang) * spd, vy: Math.sin(ang) * spd,
+        life: 1,
+        col: i % 3 === 0 ? '#ff3b3b' : '#00ff41'
+      });
+    }
+
+    setTimeout(() => {
+      const sc = el('snakeOvScore');
+      if (sc) sc.innerHTML = 'SCORE<br>' + score +
+        (score >= hiScore && score > 0 ? '<br><br>★ NEW BEST ★' : '');
+      _showOv('snakeOvOver');
+    }, 600);
+  }
+
+  /* ── PAUSE / RESUME ── */
+  function _pauseGame() {
+    state = 'paused';
+    _clearLoop();
+    playPause();
+    _showOv('snakeOvPause');
+  }
+  function _resumeGame() {
+    state = 'playing';
+    _hideAllOv();
+    loopId = setInterval(_tick, Math.max(70, SPEEDS[speed] - (level-1)*8));
+    playPause();
+  }
+
+  /* ── RENDER RAF ── */
+  function _render() {
+    animId = requestAnimationFrame(_render);
+    foodBeat = (foodBeat + 0.06) % (Math.PI * 2);
+    if (state === 'over') _updateParticles();
     _draw();
   }
 
-  /* ─────────────────────────────────
-     DRAWING
-  ───────────────────────────────── */
+  /* ── DRAW ── */
   function _draw() {
-    if (!ctx || cellSize <= 0 || !snake.length) return;
-    const cs = cellSize;
+    if (!ctx || !canvas.width) return;
+    const W = canvas.width, H = canvas.height;
+    const cs = W / COLS;
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.clearRect(0, 0, W, H);
 
-    // نقاط الشبكة
-    ctx.fillStyle = 'rgba(255,255,255,0.04)';
-    for (let x = 0; x < GRID; x++) {
-      for (let y = 0; y < GRID; y++) {
-        ctx.beginPath();
-        ctx.arc(x * cs + cs / 2, y * cs + cs / 2, 1, 0, Math.PI * 2);
-        ctx.fill();
-      }
+    // Background
+    ctx.fillStyle = '#050f05';
+    ctx.fillRect(0, 0, W, H);
+
+    // Grid
+    ctx.strokeStyle = 'rgba(0,100,24,.18)';
+    ctx.lineWidth = .5;
+    for (let x = 0; x <= COLS; x++) {
+      ctx.beginPath(); ctx.moveTo(x*cs, 0); ctx.lineTo(x*cs, H); ctx.stroke();
+    }
+    for (let y = 0; y <= ROWS; y++) {
+      ctx.beginPath(); ctx.moveTo(0, y*cs); ctx.lineTo(W, y*cs); ctx.stroke();
     }
 
-    // جسم التعبان
-    snake.forEach((seg, i) => {
-      const t  = i / snake.length;
-      const r  = cs - 4;
-      const ox = seg.x * cs + 2;
-      const oy = seg.y * cs + 2;
+    if (state === 'idle') return;
 
-      ctx.fillStyle = i === 0
-        ? '#64ffda'
-        : `rgba(50,${Math.floor(200 - t * 100)},${Math.floor(150 - t * 80)},${1 - t * 0.5})`;
-
-      _roundRect(ox, oy, r, r, i === 0 ? 8 : 5);
-      ctx.fill();
-
-      if (i === 0) {
-        ctx.fillStyle = '#0a0a1f';
-        const ex1 = ox + (dir.x === 0 ? r * 0.3 : dir.x > 0 ? r * 0.65 : r * 0.15);
-        const ey1 = oy + (dir.y === 0 ? r * 0.25 : dir.y > 0 ? r * 0.65 : r * 0.15);
-        const ex2 = ox + (dir.x === 0 ? r * 0.65 : dir.x > 0 ? r * 0.65 : r * 0.15);
-        const ey2 = oy + (dir.y === 0 ? r * 0.65 : dir.y > 0 ? r * 0.65 : r * 0.15);
-        ctx.beginPath(); ctx.arc(ex1, ey1, 2.5, 0, Math.PI * 2); ctx.fill();
-        ctx.beginPath(); ctx.arc(ex2, ey2, 2.5, 0, Math.PI * 2); ctx.fill();
-      }
-    });
-
-    // طعام (تفاحة)
-    if (food) {
+    // Food
+    if (food && (state !== 'over' || deathParts.length > 0)) {
+      const pulse = 1 + 0.18 * Math.sin(foodBeat);
       const fx = food.x * cs + cs / 2;
       const fy = food.y * cs + cs / 2;
-      const pulse = 1 + 0.1 * Math.sin(Date.now() / 200);
-      const fr = (cs / 2 - 4) * pulse;
-      ctx.fillStyle = '#ff6b6b';
-      ctx.beginPath(); ctx.arc(fx, fy, fr, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = '#c0392b';
-      ctx.beginPath(); ctx.arc(fx - fr * 0.25, fy - fr * 0.25, fr * 0.35, 0, Math.PI * 2); ctx.fill();
-      ctx.strokeStyle = '#27ae60';
-      ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.moveTo(fx, fy - fr); ctx.lineTo(fx + 4, fy - fr - 5); ctx.stroke();
+      const r  = (cs / 2 - 3) * pulse;
+
+      const grd = ctx.createRadialGradient(fx, fy, 0, fx, fy, r * 1.8);
+      grd.addColorStop(0, 'rgba(255,80,80,.35)');
+      grd.addColorStop(1, 'transparent');
+      ctx.fillStyle = grd;
+      ctx.beginPath(); ctx.arc(fx, fy, r * 1.8, 0, Math.PI * 2); ctx.fill();
+
+      ctx.shadowColor = '#ff3b3b';
+      ctx.shadowBlur  = 12;
+      ctx.fillStyle   = '#ff3b3b';
+      ctx.beginPath(); ctx.arc(fx, fy, r, 0, Math.PI * 2); ctx.fill();
+      ctx.shadowBlur  = 0;
     }
 
-    // طعام مميز (نجمة)
-    if (special) {
-      const sx = special.x * cs + cs / 2;
-      const sy = special.y * cs + cs / 2;
-      ctx.font = `${Math.max(cs - 4, 12)}px serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText('⭐', sx, sy);
+    // Snake
+    if (snake && snake.length) {
+      snake.forEach((seg, i) => {
+        const t     = 1 - i / snake.length;
+        const alpha = 0.4 + 0.6 * t;
+        const pad   = i === 0 ? 1 : 2;
+        const rx    = seg.x * cs + pad;
+        const ry    = seg.y * cs + pad;
+        const rs    = cs - pad * 2;
+
+        if (i === 0) { ctx.shadowColor = '#00ff41'; ctx.shadowBlur = 14; }
+        ctx.fillStyle = i === 0
+          ? `rgba(0,255,65,${alpha})`
+          : `rgba(0,${Math.round(180*t+50)},${Math.round(30*t)},${alpha})`;
+        _roundRect(rx, ry, rs, rs, 4);
+        ctx.shadowBlur = 0;
+
+        // Eyes
+        if (i === 0) {
+          ctx.fillStyle = '#050f05';
+          const eSz = Math.max(2, Math.floor(cs * 0.18));
+          let e1, e2;
+          const p = cs / 20;
+          if      (dir.x ===  1) { e1={x:cs*.5, y:cs*.2}; e2={x:cs*.5, y:cs*.6}; }
+          else if (dir.x === -1) { e1={x:cs*.3, y:cs*.2}; e2={x:cs*.3, y:cs*.6}; }
+          else if (dir.y === -1) { e1={x:cs*.2, y:cs*.3}; e2={x:cs*.6, y:cs*.3}; }
+          else                   { e1={x:cs*.2, y:cs*.5}; e2={x:cs*.6, y:cs*.5}; }
+          ctx.fillRect(seg.x*cs+e1.x, seg.y*cs+e1.y, eSz, eSz);
+          ctx.fillRect(seg.x*cs+e2.x, seg.y*cs+e2.y, eSz, eSz);
+        }
+      });
     }
-  }
 
-  /* ─────────────────────────────────
-     READY SCREEN
-  ───────────────────────────────── */
-  function _drawReady() {
-    if (!ctx || cellSize <= 0) return;
-    _draw();  // ارسم اللعبة في الخلفية (ثابتة)
-
-    // طبقة شفافة
-    ctx.fillStyle = 'rgba(10,10,31,0.78)';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    const cx = canvas.width  / 2;
-    const cy = canvas.height / 2;
-
-    // أيقونة التعبان
-    ctx.font = `${Math.round(canvas.width * 0.18)}px serif`;
-    ctx.textAlign    = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('🐍', cx, cy - canvas.height * 0.13);
-
-    // عنوان
-    ctx.fillStyle = '#64ffda';
-    ctx.font = `bold ${Math.round(canvas.width * 0.072)}px Syne, sans-serif`;
-    ctx.fillText('التعبان الكلاسيكي', cx, cy + canvas.height * 0.04);
-
-    // تعليمة
-    ctx.fillStyle = 'rgba(255,255,255,0.55)';
-    ctx.font = `${Math.round(canvas.width * 0.054)}px Cairo, sans-serif`;
-    ctx.fillText('اضغط أي زر أو المس الشاشة للبدء', cx, cy + canvas.height * 0.14);
-  }
-
-  function _drawPaused() {
-    _draw();
-    if (!ctx) return;
-    ctx.fillStyle = 'rgba(0,0,0,0.5)';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = '#e8e8ff';
-    ctx.font = 'bold 26px Syne, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('⏸  موقوف', canvas.width / 2, canvas.height / 2);
+    // Particles
+    deathParts.forEach(p => {
+      ctx.globalAlpha = p.life;
+      ctx.fillStyle   = p.col;
+      ctx.shadowColor = p.col;
+      ctx.shadowBlur  = 6;
+      ctx.fillRect(p.x - 2, p.y - 2, 4, 4);
+    });
+    ctx.globalAlpha = 1;
+    ctx.shadowBlur  = 0;
   }
 
   function _roundRect(x, y, w, h, r) {
     ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.lineTo(x + w - r, y);
-    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
-    ctx.lineTo(x + w, y + h - r);
-    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-    ctx.lineTo(x + r, y + h);
-    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
-    ctx.lineTo(x, y + r);
-    ctx.quadraticCurveTo(x, y, x + r, y);
-    ctx.closePath();
+    ctx.moveTo(x+r, y); ctx.lineTo(x+w-r, y);
+    ctx.arcTo(x+w, y, x+w, y+r, r); ctx.lineTo(x+w, y+h-r);
+    ctx.arcTo(x+w, y+h, x+w-r, y+h, r); ctx.lineTo(x+r, y+h);
+    ctx.arcTo(x, y+h, x, y+h-r, r); ctx.lineTo(x, y+r);
+    ctx.arcTo(x, y, x+r, y, r);
+    ctx.closePath(); ctx.fill();
   }
 
-  /* ─────────────────────────────────
-     FOOD
-  ───────────────────────────────── */
-  function _placeFood() {
+  function _updateParticles() {
+    deathParts.forEach(p => {
+      p.x += p.vx; p.y += p.vy;
+      p.vy += 0.1;
+      p.life -= 0.025;
+    });
+    deathParts = deathParts.filter(p => p.life > 0);
+  }
+
+  /* ── HELPERS ── */
+  function _spawnFood() {
     let pos;
     do {
-      pos = { x: Math.floor(Math.random() * GRID), y: Math.floor(Math.random() * GRID) };
-    } while (snake.some(s => s.x === pos.x && s.y === pos.y));
-    food = pos;
+      pos = { x: Math.floor(Math.random()*COLS), y: Math.floor(Math.random()*ROWS) };
+    } while (snake && snake.some(s => s.x===pos.x && s.y===pos.y));
+    return pos;
   }
 
-  function _placeSpecial() {
-    let pos;
-    do {
-      pos = { x: Math.floor(Math.random() * GRID), y: Math.floor(Math.random() * GRID) };
-    } while (
-      snake.some(s => s.x === pos.x && s.y === pos.y) ||
-      (food && pos.x === food.x && pos.y === food.y)
-    );
-    special = pos;
-    setTimeout(() => { special = null; }, 5000);
+  function _clearLoop() {
+    if (loopId) { clearInterval(loopId); loopId = null; }
   }
 
-  /* ─────────────────────────────────
-     DIRECTION
-  ───────────────────────────────── */
-  function _tryDir(d) {
-    if (!running || paused) return;
-    const map = { U:{x:0,y:-1}, D:{x:0,y:1}, L:{x:-1,y:0}, R:{x:1,y:0} };
-    const nd = map[d];
-    if (!nd) return;
-    if (nd.x === -dir.x && nd.y === -dir.y) return;
-    nextDir = nd;
+  function _updateHud() {
+    const sc = el('snakeHudScore'); if (sc) sc.textContent = score;
+    const lv = el('snakeHudLevel'); if (lv) lv.textContent = level;
+    const hi = el('snakeHudBest');  if (hi) hi.textContent = hiScore;
   }
 
-  function _onKey(e) {
-    const map = {
-      ArrowUp:'U', ArrowDown:'D', ArrowLeft:'L', ArrowRight:'R',
-      w:'U', s:'D', a:'L', d:'R', W:'U', S:'D', A:'L', D:'R',
-    };
-    if (map[e.key]) {
-      e.preventDefault();
-      if (waiting) { _startFromWait(); }
-      _tryDir(map[e.key]);
-    }
-    if (e.key === ' ') { e.preventDefault(); togglePause(); }
+  function _showFlash(txt) {
+    const f = el('snakeLevelFlash');
+    if (!f) return;
+    f.textContent = txt;
+    f.classList.add('show');
+    setTimeout(() => f.classList.remove('show'), 900);
   }
 
-  /* ─────────────────────────────────
-     CANVAS SIZING
-  ───────────────────────────────── */
+  function _showOv(id) {
+    _hideAllOv();
+    const o = el(id); if (o) o.classList.add('show');
+  }
+  function _hideAllOv() {
+    ['snakeOvStart','snakeOvPause','snakeOvOver'].forEach(id => {
+      const o = el(id); if (o) o.classList.remove('show');
+    });
+  }
+
   function _sizeCanvas() {
     if (!canvas) return;
     const wrap = document.querySelector('.snake-board-wrap');
     if (!wrap) return;
-    const available = wrap.clientWidth || wrap.offsetWidth || 360;
-    const maxW = Math.min(available - 8, 420);
-    const size = Math.max(Math.floor(maxW / GRID) * GRID, GRID * 10);
-    cellSize = size / GRID;
+    const size = wrap.clientWidth || 360;
     canvas.width  = size;
     canvas.height = size;
-    if (waiting)         { _drawReady(); }
-    else if (paused)     { _drawPaused(); }
-    else if (running)    { _draw(); }
   }
 
-  /* ─────────────────────────────────
-     GAME OVER
-  ───────────────────────────────── */
-  function _gameOver() {
-    running = false;
-    _stopLoop();
-
-    const isRecord = score > 0 && score >= bestScore;
-    const sc = el('snakeOverlayScore');  if (sc) sc.textContent = `النقاط: ${score}`;
-    const rc = el('snakeOverlayRecord'); if (rc) rc.textContent = isRecord ? '🏆 رقم قياسي جديد!' : '';
-    const ov = el('snakeOverlay');       if (ov) ov.classList.add('visible');
+  /* ── DIRECTION ── */
+  function _dpadMove(dx, dy) {
+    if (state !== 'playing') return;
+    if (dx !== 0 && dir.x === 0) nextDir = { x: dx, y: 0 };
+    if (dy !== 0 && dir.y === 0) nextDir = { x: 0,  y: dy };
   }
 
-  function _hideOverlay() {
-    const ov = el('snakeOverlay');
-    if (ov) ov.classList.remove('visible');
+  function _onKey(e) {
+    if (e.key === ' ' || e.key === 'Escape') {
+      e.preventDefault();
+      if      (state === 'playing') _pauseGame();
+      else if (state === 'paused')  _resumeGame();
+      return;
+    }
+    const map = {
+      ArrowUp:{x:0,y:-1}, ArrowDown:{x:0,y:1},
+      ArrowLeft:{x:-1,y:0}, ArrowRight:{x:1,y:0},
+      w:{x:0,y:-1}, s:{x:0,y:1}, a:{x:-1,y:0}, d:{x:1,y:0},
+      W:{x:0,y:-1}, S:{x:0,y:1}, A:{x:-1,y:0}, D:{x:1,y:0},
+    };
+    const nd = map[e.key];
+    if (!nd) return;
+    e.preventDefault();
+    if (nd.x !== 0 && dir && dir.x === 0) nextDir = nd;
+    if (nd.y !== 0 && dir && dir.y === 0) nextDir = nd;
   }
 
-  /* ─────────────────────────────────
-     STATS
-  ───────────────────────────────── */
-  function _updateStats() {
-    const sc = el('snakeScore'); if (sc) sc.textContent = score;
-    const lv = el('snakeLevel'); if (lv) lv.textContent = level;
-    _updateBest();
-  }
-  function _updateBest() {
-    const bs = el('snakeBest'); if (bs) bs.textContent = bestScore;
-  }
-
-  /* ─────────────────────────────────
-     PUBLIC API
-  ───────────────────────────────── */
-  return { init, newGame, setSpeed, togglePause, dpad };
+  return { init, newGame, setSpeed };
 })();
