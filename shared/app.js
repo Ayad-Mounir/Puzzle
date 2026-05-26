@@ -39,11 +39,13 @@
       document.querySelector('.secondary-controls'),
       document.querySelector('.highscore-panel'),
     ];
-    const damaSection  = document.getElementById('damaSection');
-    const snakeSection = document.getElementById('snakeSection');
+    const damaSection   = document.getElementById('damaSection');
+    const snakeSection  = document.getElementById('snakeSection');
+    const memorySection = document.getElementById('memorySection');
     const tabPuzzle = document.getElementById('tabPuzzle');
     const tabDama   = document.getElementById('tabDama');
     const tabSnake  = document.getElementById('tabSnake');
+    const tabMemory = document.getElementById('tabMemory');
     const title     = document.getElementById('mainTitle');
     const subtitle  = document.getElementById('mainSubtitle');
     const footer    = document.getElementById('mainFooter');
@@ -52,7 +54,8 @@
     puzzleEls.forEach(el => { if (el) el.style.display = 'none'; });
     damaSection.classList.remove('visible');
     snakeSection.classList.remove('visible');
-    [tabPuzzle, tabDama, tabSnake].forEach(t => { if (t) t.classList.remove('active'); });
+    memorySection.classList.remove('visible');
+    [tabPuzzle, tabDama, tabSnake, tabMemory].forEach(t => { if (t) t.classList.remove('active'); });
 
     if (game === 'puzzle') {
       puzzleEls.forEach(el => { if (el) el.style.display = ''; });
@@ -76,5 +79,13 @@
       subtitle.textContent = 'CLASSIC SNAKE';
       footer.textContent   = 'v5.0 — التعبان الكلاسيكي 🐍';
       SNAKE.init();
+
+    } else if (game === 'memory') {
+      memorySection.classList.add('visible');
+      tabMemory.classList.add('active');
+      title.textContent    = '🎴 لعبة الذاكرة';
+      subtitle.textContent = 'MEMORY CARDS';
+      footer.textContent   = 'v6.0 — لعبة الذاكرة 🎴';
+      MEMORY.init();
     }
   }
