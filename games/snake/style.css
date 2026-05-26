@@ -189,9 +189,9 @@
 
 /* D-pad layout: صف 1 = ▲ في المنتصف, صف 2 = ◄ في اليسار ▼ في المنتصف ► في اليمين */
 #s-btn-up    { grid-column: 2; grid-row: 1; }
-#s-btn-right { grid-column: 1; grid-row: 2; }
+#s-btn-left  { grid-column: 1; grid-row: 2; }
 #s-btn-down  { grid-column: 2; grid-row: 2; }
-#s-btn-left  { grid-column: 3; grid-row: 2; }
+#s-btn-right { grid-column: 3; grid-row: 2; }
 
 /* Speed selector */
 .snake-speed {
