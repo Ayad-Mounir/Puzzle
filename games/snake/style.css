@@ -26,7 +26,7 @@
   background: repeating-linear-gradient(
     to bottom,
     transparent 0px, transparent 2px,
-    rgba(0,0,0,.12) 2px, rgba(0,0,0,.12) 4px
+    rgba(0,0,0,.06) 2px, rgba(0,0,0,.06) 4px
   );
   opacity: 0;
   transition: opacity .3s;
@@ -58,9 +58,9 @@
   letter-spacing: 1px;
 }
 #snakeHud .s-val {
-  color: #00ff41;
+  color: #00ff88;
   font-size: 14px;
-  text-shadow: 0 0 8px #00ff41;
+  text-shadow: 0 0 12px #00ff88, 0 0 24px #00ff41;
 }
 
 /* Canvas Wrapper */
@@ -122,8 +122,8 @@
 
 .snake-ov h2 {
   font-size: clamp(14px, 5vw, 22px);
-  color: #00ff41;
-  text-shadow: 0 0 20px #00ff41, 0 0 40px #00cc33;
+  color: #00ff88;
+  text-shadow: 0 0 20px #00ff88, 0 0 40px #00ff41;
   line-height: 1.7;
   letter-spacing: 3px;
 }
@@ -172,8 +172,8 @@
 @media (pointer: coarse) { #snakeDpad { display: grid; } }
 
 #snakeDpad button {
-  background: rgba(0,255,65,.06);
-  border: 1px solid #006618;
+  background: rgba(0,255,65,.12);
+  border: 2px solid #00aa44;
   color: #00ff41;
   font-size: 20px;
   cursor: pointer;
@@ -189,9 +189,9 @@
 
 /* D-pad layout: صف 1 = ▲ في المنتصف, صف 2 = ◄ في اليسار ▼ في المنتصف ► في اليمين */
 #s-btn-up    { grid-column: 2; grid-row: 1; }
-#s-btn-left  { grid-column: 1; grid-row: 2; }
+#s-btn-right { grid-column: 1; grid-row: 2; }
 #s-btn-down  { grid-column: 2; grid-row: 2; }
-#s-btn-right { grid-column: 3; grid-row: 2; }
+#s-btn-left  { grid-column: 3; grid-row: 2; }
 
 /* Speed selector */
 .snake-speed {
