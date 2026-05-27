@@ -162,18 +162,21 @@
     /* ── Back to Home button ── */
     .home-back-btn {
       position: absolute;
-      right: 16px;
+      left: 12px;
       top: 50%;
       transform: translateY(-50%);
       background: rgba(255,255,255,0.07);
-      border: 1px solid rgba(255,255,255,0.1);
-      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 12px;
       color: var(--text-muted);
-      font-size: 14px;
-      padding: 6px 10px;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 7px 11px;
       cursor: pointer;
       transition: all 180ms ease;
-      font-family: inherit;
+      font-family: 'Cairo', sans-serif;
+      white-space: nowrap;
+      direction: rtl;
     }
     .home-back-btn:hover {
       background: rgba(255,255,255,0.13);
