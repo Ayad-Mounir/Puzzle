@@ -6,6 +6,7 @@
      BOOT
   ============================================================ */
   window.addEventListener('DOMContentLoaded', () => {
+    // Hide loader
     function hideLoader() {
       var el = document.getElementById('loadingScreen');
       if (el) { el.style.display = 'none'; }
@@ -13,13 +14,13 @@
     setTimeout(hideLoader, 400);
     setTimeout(hideLoader, 3000);
 
-    // Sync mute button state on load
+    // Sync mute button
     if (AUDIO.muted) {
       const btn = document.getElementById('muteBtn');
       if (btn) { btn.textContent = '🔇 الصوت'; btn.classList.add('muted'); }
     }
 
-    // Show home screen — don't init any game yet
+    // Start on Home Screen
     document.getElementById('appWrapper').style.display = 'none';
   });
 
@@ -30,9 +31,11 @@
     const home = document.getElementById('homeScreen');
     home.classList.add('hide');
     setTimeout(() => {
-      home.style.display = 'none';
-      document.getElementById('appWrapper').style.display = '';
-      switchGame(game);
+      home.style.display   = 'none';
+      const wrap = document.getElementById('appWrapper');
+      wrap.style.display   = '';
+      // Wait one frame for DOM to paint before init
+      requestAnimationFrame(() => requestAnimationFrame(() => switchGame(game)));
     }, 420);
   }
 
@@ -42,9 +45,11 @@
   function goHome() {
     const home = document.getElementById('homeScreen');
     home.style.display = '';
-    home.classList.remove('hide');
+    // Reset hide class after a tick so transition replays next time
+    setTimeout(() => home.classList.remove('hide'), 10);
     document.getElementById('appWrapper').style.display = 'none';
   }
+
   /* ============================================================
      GAME SWITCHER
   ============================================================ */
@@ -64,41 +69,50 @@
     const damaSection   = document.getElementById('damaSection');
     const snakeSection  = document.getElementById('snakeSection');
     const memorySection = document.getElementById('memorySection');
-    const title    = document.getElementById('mainTitle');
-    const subtitle = document.getElementById('mainSubtitle');
-    const footer   = document.getElementById('mainFooter');
+    const titleEl    = document.getElementById('mainTitle');
+    const subtitleEl = document.getElementById('mainSubtitle');
+    const footerEl   = document.getElementById('mainFooter');
 
-    // Reset all
-    puzzleEls.forEach(el => { if (el) el.style.display = 'none'; });
+    // Reset all sections
+    puzzleEls.forEach(e => { if (e) e.style.display = 'none'; });
     damaSection.classList.remove('visible');
     snakeSection.classList.remove('visible');
     memorySection.classList.remove('visible');
 
     if (game === 'puzzle') {
-      puzzleEls.forEach(el => { if (el) el.style.display = ''; });
-      title.textContent    = '🧩 Sliding Puzzle';
-      subtitle.textContent = 'اللغز المنزلق الكلاسيكي';
-      footer.textContent   = 'v2.0 — Phase 5: Sound + Ghost + Share ✅';
+      puzzleEls.forEach(e => { if (e) e.style.display = ''; });
+      titleEl.textContent    = '🧩 Sliding Puzzle';
+      subtitleEl.textContent = 'اللغز المنزلق الكلاسيكي';
+      footerEl.textContent   = 'v2.0 — اللغز المنزلق 🧩';
+      if (typeof initGame === 'function') initGame();
 
     } else if (game === 'dama') {
+      titleEl.textContent    = '♟️ الداما المغربية';
+      subtitleEl.textContent = 'MOROCCAN CHECKERS';
+      footerEl.textContent   = 'v2.0 — الداما المغربية ♟️';
       damaSection.classList.add('visible');
-      title.textContent    = '♟️ الداما المغربية';
-      subtitle.textContent = 'MOROCCAN CHECKERS';
-      footer.textContent   = 'v2.0 — الداما المغربية 🏆';
-      if (!DAMA.initialized) { damaInit(); }
+      // Init after section is visible so board has dimensions
+      setTimeout(() => {
+        if (!DAMA.initialized) { damaInit(); }
+        else { damaRender(); }
+      }, 60);
 
     } else if (game === 'snake') {
+      titleEl.textContent    = '🐍 لعبة التعبان';
+      subtitleEl.textContent = 'CLASSIC SNAKE';
+      footerEl.textContent   = 'v5.0 — التعبان الكلاسيكي 🐍';
       snakeSection.classList.add('visible');
-      title.textContent    = '🐍 لعبة التعبان';
-      subtitle.textContent = 'CLASSIC SNAKE';
-      footer.textContent   = 'v5.0 — التعبان الكلاسيكي 🐍';
-      SNAKE.init();
+      setTimeout(() => SNAKE.init(), 60);
 
     } else if (game === 'memory') {
+      titleEl.textContent    = '🎴 لعبة الذاكرة';
+      subtitleEl.textContent = 'MEMORY CARDS';
+      footerEl.textContent   = 'v6.0 — لعبة الذاكرة 🎴';
       memorySection.classList.add('visible');
-      title.textContent    = '🎴 لعبة الذاكرة';
-      subtitle.textContent = 'MEMORY CARDS';
-      footer.textContent   = 'v6.0 — لعبة الذاكرة 🎴';
-      MEMORY.init();
+      // Always start fresh — reset initialized so board rebuilds
+      setTimeout(() => {
+        MEMORY.initialized = false;
+        MEMORY.init();
+      }, 60);
     }
   }
