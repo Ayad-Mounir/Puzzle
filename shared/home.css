@@ -1,0 +1,275 @@
+/* ============================================================
+   HOME SCREEN — صفحة الاختيار الرئيسية
+   ============================================================ */
+
+#homeScreen {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  padding: 0 0 40px;
+  background: var(--bg-deep);
+  transition: opacity 500ms ease, transform 500ms ease;
+}
+
+#homeScreen.hide {
+  opacity: 0;
+  transform: scale(1.04);
+  pointer-events: none;
+}
+
+/* ── Stars background ── */
+#homeScreen::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 80% 50% at 20% 0%,   rgba(168,85,247,0.18) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 70% at 80% 100%,  rgba(0,212,255,0.13)  0%, transparent 60%),
+    radial-gradient(ellipse 100% 100% at 50% 50%, rgba(26,26,58,0.9)    0%, var(--bg-deep) 100%);
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* ── Hero ── */
+.home-hero {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 56px 24px 32px;
+  text-align: center;
+  position: relative;
+}
+
+.home-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(245,200,66,0.12);
+  border: 1px solid rgba(245,200,66,0.3);
+  border-radius: 50px;
+  padding: 5px 14px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--accent-gold);
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  margin-bottom: 20px;
+  animation: fadeSlideDown 600ms 200ms both ease;
+}
+
+.home-title {
+  font-family: 'Syne', sans-serif;
+  font-size: clamp(30px, 8vw, 46px);
+  font-weight: 800;
+  line-height: 1.15;
+  color: var(--text-primary);
+  margin-bottom: 10px;
+  animation: fadeSlideDown 600ms 300ms both ease;
+}
+
+.home-title span {
+  background: linear-gradient(135deg, #f5c842, #ff8c00);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.home-subtitle {
+  font-size: 14px;
+  color: var(--text-muted);
+  max-width: 280px;
+  line-height: 1.7;
+  animation: fadeSlideDown 600ms 400ms both ease;
+}
+
+/* ── Stats strip ── */
+.home-stats-strip {
+  display: flex;
+  gap: 0;
+  width: 100%;
+  max-width: 420px;
+  padding: 0 20px;
+  margin-bottom: 28px;
+  animation: fadeSlideDown 600ms 450ms both ease;
+}
+.home-strip-item {
+  flex: 1;
+  text-align: center;
+  padding: 12px 4px;
+  border-bottom: 2px solid rgba(255,255,255,0.06);
+}
+.home-strip-item:not(:last-child) {
+  border-left: 1px solid rgba(255,255,255,0.06);
+}
+.home-strip-value {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+.home-strip-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .8px;
+  margin-top: 2px;
+}
+
+/* ── Section label ── */
+.home-section-label {
+  width: 100%;
+  max-width: 420px;
+  padding: 0 20px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  animation: fadeSlideDown 600ms 500ms both ease;
+}
+
+/* ── Game Cards Grid ── */
+.home-games-grid {
+  width: 100%;
+  max-width: 420px;
+  padding: 0 16px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.home-game-card {
+  position: relative;
+  border-radius: 22px;
+  padding: 22px 16px 18px;
+  cursor: pointer;
+  border: 1.5px solid rgba(255,255,255,0.07);
+  background: var(--bg-card);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  transition: transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease;
+  animation: cardPop 500ms both ease;
+}
+
+.home-game-card:nth-child(1) { animation-delay: 550ms; }
+.home-game-card:nth-child(2) { animation-delay: 620ms; }
+.home-game-card:nth-child(3) { animation-delay: 690ms; }
+.home-game-card:nth-child(4) { animation-delay: 760ms; }
+.home-game-card:nth-child(5) { animation-delay: 830ms; grid-column: 1 / -1; flex-direction: row; align-items: center; padding: 18px 22px; }
+
+@keyframes cardPop {
+  from { opacity: 0; transform: translateY(20px) scale(0.95); }
+  to   { opacity: 1; transform: translateY(0)   scale(1);    }
+}
+
+.home-game-card:active {
+  transform: scale(0.96);
+}
+
+.home-game-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 22px;
+  opacity: 0;
+  transition: opacity 200ms ease;
+}
+.home-game-card:active::before { opacity: 1; }
+
+/* Card accent colors */
+.home-game-card[data-game="puzzle"]  { --card-accent: #a855f7; }
+.home-game-card[data-game="dama"]    { --card-accent: #f5c842; }
+.home-game-card[data-game="snake"]   { --card-accent: #22c55e; }
+.home-game-card[data-game="memory"]  { --card-accent: #00d4ff; }
+.home-game-card[data-game="coming"]  { --card-accent: #6b6b9a; opacity: 0.55; cursor: default; }
+
+.home-game-card {
+  border-color: rgba(255,255,255,0.07);
+  box-shadow: 0 0 0 0 var(--card-accent);
+}
+.home-game-card:not([data-game="coming"]):active {
+  border-color: var(--card-accent);
+  box-shadow: 0 0 20px -4px var(--card-accent);
+}
+
+/* Glow blob */
+.home-game-card::after {
+  content: '';
+  position: absolute;
+  top: -20px; right: -20px;
+  width: 80px; height: 80px;
+  border-radius: 50%;
+  background: var(--card-accent);
+  opacity: 0.08;
+  pointer-events: none;
+}
+
+.home-card-emoji {
+  font-size: 32px;
+  line-height: 1;
+  margin-bottom: 2px;
+}
+.home-game-card:nth-child(5) .home-card-emoji { margin-bottom: 0; margin-left: 0; margin-right: 12px; }
+
+.home-card-name {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--text-primary);
+  line-height: 1.3;
+}
+.home-card-sub {
+  font-size: 10px;
+  color: var(--text-muted);
+  letter-spacing: .5px;
+}
+
+.home-card-badge {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  background: var(--card-accent);
+  color: #000;
+  font-size: 9px;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 50px;
+  letter-spacing: .5px;
+  text-transform: uppercase;
+}
+
+.home-card-coming {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  background: rgba(107,107,154,0.3);
+  color: var(--text-muted);
+  font-size: 9px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 50px;
+  letter-spacing: .5px;
+}
+
+/* ── Footer ── */
+.home-footer {
+  margin-top: 32px;
+  font-size: 11px;
+  color: var(--text-muted);
+  animation: fadeSlideDown 600ms 900ms both ease;
+}
+
+/* ── Animations ── */
+@keyframes fadeSlideDown {
+  from { opacity: 0; transform: translateY(-12px); }
+  to   { opacity: 1; transform: translateY(0);     }
+}
