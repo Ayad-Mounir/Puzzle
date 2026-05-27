@@ -2,7 +2,6 @@
    APP BOOT & GAME SWITCHER
    ============================================================ */
 
-
   /* ============================================================
      BOOT
   ============================================================ */
@@ -17,12 +16,35 @@
     // Sync mute button state on load
     if (AUDIO.muted) {
       const btn = document.getElementById('muteBtn');
-      btn.textContent = '🔇 الصوت';
-      btn.classList.add('muted');
+      if (btn) { btn.textContent = '🔇 الصوت'; btn.classList.add('muted'); }
     }
 
-    initGame();
+    // Show home screen — don't init any game yet
+    document.getElementById('appWrapper').style.display = 'none';
   });
+
+  /* ============================================================
+     HOME → GAME
+  ============================================================ */
+  function enterGame(game) {
+    const home = document.getElementById('homeScreen');
+    home.classList.add('hide');
+    setTimeout(() => {
+      home.style.display = 'none';
+      document.getElementById('appWrapper').style.display = '';
+      switchGame(game);
+    }, 420);
+  }
+
+  /* ============================================================
+     BACK TO HOME
+  ============================================================ */
+  function goHome() {
+    const home = document.getElementById('homeScreen');
+    home.style.display = '';
+    home.classList.remove('hide');
+    document.getElementById('appWrapper').style.display = 'none';
+  }
   /* ============================================================
      GAME SWITCHER
   ============================================================ */
