@@ -6,7 +6,7 @@
    - فور تنشيطه يُرسل رسالة SW_UPDATED لكل النوافذ
    - العميل (utils.js) يعيد تحميل الصفحة تلقائياً
    ============================================================ */
-const CACHE_NAME = 'puzzle-v20';
+const CACHE_NAME = 'puzzle-v21';
 
 const ASSETS = [
   './',
@@ -16,6 +16,7 @@ const ASSETS = [
   './icons/icon-512.png',
   // Shared
   './shared/design-system.css',
+  './shared/home.css',
   './shared/layout.css',
   './shared/overlays.css',
   './shared/utils.js',
