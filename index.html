@@ -41,6 +41,7 @@
   <link rel="stylesheet" href="games/dama/style.css" />
   <link rel="stylesheet" href="games/snake/style.css" />
   <link rel="stylesheet" href="games/memory/style.css" />
+  <link rel="stylesheet" href="shared/home.css" />
 </head>
 
 <body>
@@ -48,6 +49,64 @@
   <!-- Loading Screen -->
   <div class="loading-screen" id="loadingScreen">
     <div class="loader-ring"></div>
+  </div>
+
+  <!-- ============================================================
+       HOME SCREEN — صفحة الاختيار
+  ============================================================ -->
+  <div id="homeScreen">
+
+    <div class="home-hero">
+      <div class="home-badge">🕹️ &nbsp; ألعاب الزمن الجميل</div>
+      <h1 class="home-title">العب واستمتع<br><span>مع ألعاب طفولتك</span></h1>
+      <p class="home-subtitle">ألعاب كلاسيكية تعمل offline — بدون إنترنت، بدون إعلانات</p>
+    </div>
+
+    <div class="home-section-label">اختر لعبة</div>
+
+    <div class="home-games-grid">
+
+      <div class="home-game-card" data-game="puzzle" onclick="enterGame('puzzle')">
+        <div class="home-card-badge">v2.0</div>
+        <div class="home-card-emoji">🧩</div>
+        <div class="home-card-name">اللغز المنزلق</div>
+        <div class="home-card-sub">SLIDING PUZZLE</div>
+      </div>
+
+      <div class="home-game-card" data-game="dama" onclick="enterGame('dama')">
+        <div class="home-card-badge">v2.0</div>
+        <div class="home-card-emoji">♟️</div>
+        <div class="home-card-name">الداما المغربية</div>
+        <div class="home-card-sub">MOROCCAN CHECKERS</div>
+      </div>
+
+      <div class="home-game-card" data-game="snake" onclick="enterGame('snake')">
+        <div class="home-card-badge">v5.0</div>
+        <div class="home-card-emoji">🐍</div>
+        <div class="home-card-name">لعبة التعبان</div>
+        <div class="home-card-sub">CLASSIC SNAKE</div>
+      </div>
+
+      <div class="home-game-card" data-game="memory" onclick="enterGame('memory')">
+        <div class="home-card-badge">v6.0</div>
+        <div class="home-card-emoji">🎴</div>
+        <div class="home-card-name">لعبة الذاكرة</div>
+        <div class="home-card-sub">MEMORY CARDS</div>
+      </div>
+
+      <div class="home-game-card" data-game="coming">
+        <div class="home-card-coming">قريباً</div>
+        <div class="home-card-emoji">🎲</div>
+        <div style="flex:1">
+          <div class="home-card-name">ألعاب قادمة</div>
+          <div class="home-card-sub">الطاولة • Tic-Tac-Toe • وأكثر...</div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="home-footer">v6.0 — ألعاب الزمن الجميل 🎮</div>
+
   </div>
 
   <!-- Confetti Canvas -->
@@ -108,10 +167,11 @@
   </div>
 
   <!-- Main App -->
-  <div class="app-wrapper">
+  <div class="app-wrapper" id="appWrapper">
 
     <!-- Header -->
     <header class="header">
+      <button class="home-back-btn" onclick="goHome()" title="الرئيسية">◀</button>
       <h1 class="header-title" id="mainTitle">🧩 Sliding Puzzle</h1>
       <p class="header-subtitle" id="mainSubtitle">اللغز المنزلق الكلاسيكي</p>
     </header>
