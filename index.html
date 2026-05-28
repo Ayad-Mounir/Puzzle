@@ -505,16 +505,30 @@
          MARIO SECTION — ولد الحارة
     ============================================================ -->
     <div id="marioSection">
-      <canvas id="platformerCanvas"></canvas>
 
-      <!-- D-Pad -->
-      <div class="mario-dpad" dir="ltr">
-        <button class="mario-btn" id="p-btn-left">◀</button>
-        <button class="mario-btn" id="p-btn-start">⏸<span style="font-size:9px;font-family:Cairo,sans-serif">إيقاف</span></button>
-        <button class="mario-btn" id="p-btn-right">▶</button>
-        <div></div>
-        <button class="mario-btn" id="p-btn-jump">⬆<span style="font-size:10px;font-family:Cairo,sans-serif">قفز</span></button>
+      <!-- Rotate Prompt -->
+      <div class="mario-rotate-prompt" id="marioRotatePrompt">
+        <div class="rotate-icon">📱</div>
+        <div class="rotate-text">دوّر الشاشة للعب أفضل!</div>
+        <div class="rotate-sub">اللعبة مصممة للعرض الأفقي</div>
+        <button class="rotate-skip-btn" id="marioRotateSkip">العب عمودياً</button>
       </div>
+
+      <!-- Game -->
+      <div class="mario-game-wrap">
+        <canvas id="platformerCanvas"></canvas>
+
+        <!-- Controls -->
+        <div class="mario-controls" dir="ltr">
+          <div class="mario-dpad">
+            <button class="mario-btn" id="p-btn-left">◀</button>
+            <button class="mario-btn" id="p-btn-right">▶</button>
+          </div>
+          <button class="mario-btn" id="p-btn-pause">⏸</button>
+          <button class="mario-btn" id="p-btn-jump">⬆</button>
+        </div>
+      </div>
+
     </div>
 
   </div><!-- end app-wrapper -->
