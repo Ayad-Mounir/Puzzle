@@ -69,6 +69,7 @@
     const damaSection   = document.getElementById('damaSection');
     const snakeSection  = document.getElementById('snakeSection');
     const memorySection = document.getElementById('memorySection');
+    const marioSection  = document.getElementById('marioSection');
     const titleEl    = document.getElementById('mainTitle');
     const subtitleEl = document.getElementById('mainSubtitle');
     const footerEl   = document.getElementById('mainFooter');
@@ -78,6 +79,7 @@
     damaSection.classList.remove('visible');
     snakeSection.classList.remove('visible');
     memorySection.classList.remove('visible');
+    marioSection.classList.remove('visible');
 
     if (game === 'puzzle') {
       puzzleEls.forEach(e => { if (e) e.style.display = ''; });
@@ -114,5 +116,15 @@
         MEMORY.initialized = false;
         MEMORY.init();
       }, 60);
+
+    } else if (game === 'mario') {
+      titleEl.textContent    = '🧒 ولد الحارة';
+      subtitleEl.textContent = 'PLATFORMER';
+      footerEl.textContent   = 'v1.0 — ولد الحارة 🧒';
+      marioSection.classList.add('visible');
+      setTimeout(() => {
+        PLATFORMER.initialized = false;
+        PLATFORMER.init();
+      }, 80);
     }
   }
