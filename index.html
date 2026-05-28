@@ -41,6 +41,7 @@
   <link rel="stylesheet" href="games/dama/style.css" />
   <link rel="stylesheet" href="games/snake/style.css" />
   <link rel="stylesheet" href="games/memory/style.css" />
+  <link rel="stylesheet" href="games/mario/style.css" />
   <link rel="stylesheet" href="shared/home.css" />
 </head>
 
@@ -92,6 +93,13 @@
         <div class="home-card-emoji">🎴</div>
         <div class="home-card-name">لعبة الذاكرة</div>
         <div class="home-card-sub">MEMORY CARDS</div>
+      </div>
+
+      <div class="home-game-card" data-game="mario" onclick="enterGame('mario')">
+        <div class="home-card-badge">v1.0</div>
+        <div class="home-card-emoji">🧒</div>
+        <div class="home-card-name">ولد الحارة</div>
+        <div class="home-card-sub">PLATFORMER</div>
       </div>
 
       <div class="home-game-card" data-game="coming">
@@ -493,23 +501,34 @@
 
     <footer class="footer" id="mainFooter">v5.0 — التعبان الكلاسيكي 🐍</footer>
 
+    <!-- ============================================================
+         MARIO SECTION — ولد الحارة
+    ============================================================ -->
+    <div id="marioSection">
+      <canvas id="platformerCanvas"></canvas>
+
+      <!-- D-Pad -->
+      <div class="mario-dpad" dir="ltr">
+        <button class="mario-btn" id="p-btn-left">◀</button>
+        <button class="mario-btn" id="p-btn-start">⏸<span style="font-size:9px;font-family:Cairo,sans-serif">إيقاف</span></button>
+        <button class="mario-btn" id="p-btn-right">▶</button>
+        <div></div>
+        <button class="mario-btn" id="p-btn-jump">⬆<span style="font-size:10px;font-family:Cairo,sans-serif">قفز</span></button>
+      </div>
+    </div>
+
   </div><!-- end app-wrapper -->
 
   <!-- ============================================================
        SCRIPTS — Load Order Matters
        ============================================================ -->
-  <!-- Shared Utilities: Audio, Confetti, PWA, SW -->
   <script src="shared/utils.js"></script>
-  <!-- Sliding Puzzle -->
   <script src="games/sliding-puzzle/solver.js"></script>
   <script src="games/sliding-puzzle/game.js"></script>
-  <!-- Dama -->
   <script src="games/dama/game.js"></script>
-  <!-- Snake -->
   <script src="games/snake/game.js"></script>
-  <!-- Memory -->
   <script src="games/memory/game.js"></script>
-  <!-- App Boot & Game Switcher -->
+  <script src="games/mario/game.js"></script>
   <script src="shared/app.js"></script>
 
 </body>
