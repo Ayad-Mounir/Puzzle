@@ -6,7 +6,7 @@
    - فور تنشيطه يُرسل رسالة SW_UPDATED لكل النوافذ
    - العميل (utils.js) يعيد تحميل الصفحة تلقائياً
    ============================================================ */
-const CACHE_NAME = 'puzzle-v23';
+const CACHE_NAME = 'puzzle-v24';
 
 const ASSETS = [
   './',
@@ -34,6 +34,8 @@ const ASSETS = [
   // Memory
   './games/memory/style.css',
   './games/memory/game.js',
+  './games/mario/style.css',
+  './games/mario/game.js',
 ];
 
 /* INSTALL — cache everything */
