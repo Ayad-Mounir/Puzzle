@@ -1,5 +1,5 @@
 /* ============================================================
-   ولد الحارة — Platformer Style
+   ولد الحارة — Platformer Style + Landscape Mode
    ============================================================ */
 
 #marioSection {
@@ -8,40 +8,111 @@
   align-items: center;
   width: 100%;
   gap: 0;
-  padding-bottom: 16px;
+  padding: 0;
+  position: relative;
 }
 #marioSection.visible { display: flex; }
+
+/* ── Rotate Prompt (portrait only) ── */
+.mario-rotate-prompt {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  background: #0d0d1a;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+}
+.mario-rotate-prompt.show { display: flex; }
+
+.rotate-icon {
+  font-size: 64px;
+  animation: rotateAnim 1.4s ease-in-out infinite;
+}
+@keyframes rotateAnim {
+  0%,100% { transform: rotate(0deg); }
+  40%     { transform: rotate(90deg); }
+  60%     { transform: rotate(90deg); }
+}
+.rotate-text {
+  font-family: 'Cairo', sans-serif;
+  font-size: 18px;
+  font-weight: 700;
+  color: #fff;
+  text-align: center;
+}
+.rotate-sub {
+  font-family: 'Cairo', sans-serif;
+  font-size: 13px;
+  color: rgba(255,255,255,0.5);
+  text-align: center;
+}
+.rotate-skip-btn {
+  margin-top: 8px;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 12px;
+  color: rgba(255,255,255,0.5);
+  font-family: 'Cairo', sans-serif;
+  font-size: 13px;
+  padding: 8px 20px;
+  cursor: pointer;
+}
+
+/* ── Game Wrapper (handles landscape layout) ── */
+.mario-game-wrap {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: #0d0d1a;
+}
 
 /* ── Canvas ── */
 #platformerCanvas {
   display: block;
   width: 100%;
-  max-width: 480px;
+  max-width: 100vw;
   image-rendering: pixelated;
   image-rendering: crisp-edges;
-  border-radius: 0 0 16px 16px;
-  cursor: pointer;
   touch-action: none;
 }
 
-/* ── D-Pad ── */
-.mario-dpad {
+/* ── Controls (landscape: split left/right) ── */
+.mario-controls {
   width: 100%;
-  max-width: 480px;
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr 24px 1.6fr;
-  grid-template-rows: 56px 56px;
-  gap: 6px;
-  padding: 10px 12px 0;
+  max-width: 100vw;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 16px;
+  gap: 12px;
+  background: rgba(0,0,0,0.4);
   direction: ltr;
 }
 
+.mario-dpad {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.mario-right-btns {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
 .mario-btn {
-  background: rgba(255,255,255,0.07);
-  border: 2px solid rgba(255,255,255,0.12);
-  border-radius: 12px;
+  background: rgba(255,255,255,0.08);
+  border: 2px solid rgba(255,255,255,0.15);
+  border-radius: 50%;
   color: #e8e8ff;
-  font-size: 20px;
+  font-size: 18px;
+  width: 56px;
+  height: 56px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -49,38 +120,70 @@
   user-select: none;
   -webkit-user-select: none;
   touch-action: none;
-  transition: background 100ms, transform 100ms;
+  transition: all 80ms;
   -webkit-tap-highlight-color: transparent;
+  flex-shrink: 0;
 }
 .mario-btn:active,
-.mario-btn.pressed { background: rgba(255,255,255,0.18); transform: scale(0.94); }
-
-/* Left / Right — row 1+2 col 1 and col 3 */
-#p-btn-left  { grid-column: 1; grid-row: 1 / 3; }
-#p-btn-right { grid-column: 3; grid-row: 1 / 3; }
-
-/* Jump — big button on right */
-#p-btn-jump {
-  grid-column: 5; grid-row: 1 / 3;
-  background: rgba(230,57,70,0.25);
-  border-color: rgba(230,57,70,0.5);
-  font-size: 14px;
-  font-weight: 800;
-  font-family: 'Cairo', sans-serif;
-  color: #ff8888;
-  flex-direction: column;
-  gap: 2px;
+.mario-btn.pressed {
+  background: rgba(255,255,255,0.22);
+  transform: scale(0.9);
+  border-color: rgba(255,255,255,0.4);
 }
-#p-btn-jump:active { background: rgba(230,57,70,0.5); }
 
-/* Start / pause — small center */
-#p-btn-start {
-  grid-column: 2; grid-row: 1 / 3;
-  font-size: 11px;
-  font-family: 'Cairo', sans-serif;
-  font-weight: 700;
-  color: var(--text-muted);
-  flex-direction: column;
+#p-btn-left, #p-btn-right {
+  font-size: 20px;
+}
+
+#p-btn-jump {
+  width: 68px;
+  height: 68px;
+  background: rgba(230,57,70,0.3);
+  border-color: rgba(230,57,70,0.6);
+  color: #ff9999;
+  font-size: 22px;
+  border-radius: 50%;
+  box-shadow: 0 0 16px rgba(230,57,70,0.3);
+}
+#p-btn-jump:active {
+  background: rgba(230,57,70,0.6);
+  box-shadow: 0 0 24px rgba(230,57,70,0.5);
+}
+
+#p-btn-pause {
+  width: 40px;
+  height: 40px;
+  font-size: 14px;
+  border-radius: 10px;
   background: transparent;
-  border-color: rgba(255,255,255,0.08);
+  border-color: rgba(255,255,255,0.1);
+  color: rgba(255,255,255,0.4);
+}
+
+/* Landscape mode overrides */
+@media (orientation: landscape) {
+  #marioSection.visible {
+    flex-direction: row;
+    height: 100dvh;
+    max-height: 100dvh;
+    overflow: hidden;
+  }
+  .mario-game-wrap {
+    flex: 1;
+    height: 100%;
+    flex-direction: column;
+    justify-content: center;
+  }
+  #platformerCanvas {
+    max-height: calc(100dvh - 90px);
+    width: auto;
+    height: 100%;
+    max-width: 100%;
+  }
+  .mario-controls {
+    width: 100%;
+    padding: 6px 20px;
+  }
+  .mario-btn { width: 52px; height: 52px; }
+  #p-btn-jump { width: 62px; height: 62px; }
 }
