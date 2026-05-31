@@ -12,9 +12,186 @@ const PLATFORMER = (() => {
   const RUN_SPD = 3.8;
   const FRICTION = 0.74;
 
+  /* ── AUDIO: Mario Music System (NES-style via Web Audio API) ── */
+  let audioCtx = null;
+  let audioThemeTimer = null;
+  let audioThemeNotes = [];
+
+  function _getAudioCtx() {
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    return audioCtx;
+  }
+
+  function _noteToFreq(note) {
+    const map = { 'C':0,'C#':1,'Db':1,'D':2,'D#':3,'Eb':3,'E':4,'F':5,'F#':6,'Gb':6,'G':7,'G#':8,'Ab':8,'A':9,'A#':10,'Bb':10,'B':11 };
+    const m = note.match(/^([A-G]#?b?)(\d+)$/);
+    if (!m) return null;
+    const semitone = map[m[1]];
+    if (semitone === undefined) return null;
+    const oct = parseInt(m[2]);
+    return 440 * Math.pow(2, (oct - 4 + (semitone - 9) / 12));
+  }
+
+  function _playNote(note, duration, startTime, gainVal, type) {
+    if (!note) return;
+    const ctx = _getAudioCtx();
+    const freq = _noteToFreq(note);
+    if (!freq) return;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = type || 'square';
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(gainVal || 0.12, startTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(startTime);
+    osc.stop(startTime + duration);
+  }
+
+  function _playSequence(notes, durations, gain, type) {
+    const ctx = _getAudioCtx();
+    let t = ctx.currentTime + 0.02;
+    for (let i = 0; i < notes.length; i++) {
+      if (notes[i] && notes[i] !== 'R' && notes[i] !== 'REST') {
+        _playNote(notes[i], durations[i], t, gain, type);
+      }
+      t += durations[i];
+    }
+  }
+
+  /* ── Mario Main Theme (Ground Theme) ── */
+  function playMainTheme() {
+    stopTheme();
+    const ctx = _getAudioCtx();
+    const bpm = 150;
+    const beat = 60 / bpm;
+
+    const notes = [
+      'E4','E4','R','E4','R','C4','E4','R','G4','R','R','R',
+      'G4','R','R','R','C4','R','R','G4','R','R','E4','R',
+      'R','A4','R','B4','R','Bb4','A4','R','G4','R','E4','R','G4','R',
+      'A4','F4','G4','E4','R','C4','D4','B3','R','R','C4','R','R',
+      'R','R','G4','R','R','F4','E4','D4','R','C4','R','R','R'
+    ];
+    // durations in beats
+    const durs = [
+      0.25,0.25,0.125,0.25,0.125,0.25,0.25,0.125,0.5,0.125,0.125,0.125,
+      0.5,0.125,0.125,0.125,0.5,0.125,0.125,0.5,0.125,0.125,0.5,0.125,
+      0.125,0.5,0.125,0.5,0.125,0.25,0.125,0.125,0.5,0.125,0.25,0.125,0.5,0.125,
+      0.25,0.25,0.25,0.5,0.125,0.25,0.25,0.5,0.125,0.125,0.5,0.125,0.125,
+      0.125,0.125,0.5,0.125,0.125,0.25,0.25,0.25,0.125,0.5,0.125,0.125,0.125
+    ];
+
+    audioThemeNotes = [];
+    let t = ctx.currentTime + 0.05;
+    for (let i = 0; i < notes.length; i++) {
+      const d = durs[i] * beat;
+      if (notes[i] && notes[i] !== 'R' && notes[i] !== 'REST') {
+        audioThemeNotes.push({ note: notes[i], time: t, dur: d });
+        _playNote(notes[i], d, t, 0.10, 'square');
+      }
+      t += d;
+    }
+    // loop: schedule next iteration after last note ends
+    audioThemeTimer = setTimeout(() => { playMainTheme(); }, (t - ctx.currentTime) * 1000);
+  }
+
+  function stopTheme() {
+    if (audioThemeTimer) { clearTimeout(audioThemeTimer); audioThemeTimer = null; }
+    audioThemeNotes = [];
+  }
+
+  /* ── Power-up Sound (mushroom/flower) ── */
+  function playPowerup() {
+    _playSequence(
+      ['E4','F4','G4','C5'],
+      [0.1,0.1,0.1,0.15],
+      0.12, 'square'
+    );
+  }
+
+  /* ── Starman Theme ── */
+  let starmanTimer = null;
+  function playStarman() {
+    stopStarman();
+    const ctx = _getAudioCtx();
+    const bpm = 200;
+    const beat = 60 / bpm;
+    // Pattern: C4 C4 C4 E4 F4 F4 F4 G4 ... repeated
+    const notes = [];
+    const durs = [];
+    const pattern = ['C4','C4','C4','E4','F4','F4','F4','G4'];
+    const durPat = [0.25,0.25,0.25,0.5,0.25,0.25,0.25,0.5];
+    // 4 repetitions = 32 notes
+    for (let r = 0; r < 4; r++) {
+      for (let i = 0; i < pattern.length; i++) {
+        notes.push(pattern[i]);
+        durs.push(durPat[i] * beat);
+      }
+    }
+    let t = ctx.currentTime + 0.02;
+    for (let i = 0; i < notes.length; i++) {
+      if (notes[i] !== 'R' && notes[i] !== 'REST') {
+        _playNote(notes[i], durs[i], t, 0.10, 'square');
+      }
+      t += durs[i];
+    }
+    // loop while star is active (check every ~3 sec)
+    starmanTimer = setTimeout(() => {
+      if (P && P.starTimer > 0) playStarman();
+    }, 3500);
+  }
+
+  function stopStarman() {
+    if (starmanTimer) { clearTimeout(starmanTimer); starmanTimer = null; }
+  }
+
+  /* ── Coin Sound ── */
+  function playCoin() {
+    const ctx = _getAudioCtx();
+    const t = ctx.currentTime + 0.01;
+    _playNote('E5', 0.05, t, 0.12, 'square');
+    _playNote('C4', 0.1, t + 0.06, 0.12, 'square');
+  }
+
+  /* ── Death Sound ── */
+  function playDeath() {
+    _playSequence(
+      ['C4','C4','G3','E3'],
+      [0.15,0.15,0.25,0.4],
+      0.15, 'square'
+    );
+  }
+
+  /* ── Flagpole / Level Complete ── */
+  function playFlagpole() {
+    _playSequence(
+      ['C4','E4','G4','C5','E5','C6'],
+      [0.12,0.12,0.12,0.12,0.12,0.3],
+      0.12, 'square'
+    );
+  }
+
+  const AUDIO_MUSIC = {
+    playMainTheme,
+    stopTheme,
+    playPowerup,
+    playStarman,
+    stopStarman,
+    playCoin,
+    playDeath,
+    playFlagpole,
+    init() { _getAudioCtx(); },
+  };
+
   /* ── State ── */
   let canvas, ctx, initialized = false;
   let raf = null, state = 'start';
+  let countdownTimer = 0; // frames remaining in countdown
   let frameCount = 0, score = 0, lives = 3, coinCount = 0, level = 0;
   let invincible = 0;
   let particles = [];
@@ -49,6 +226,7 @@ const PLATFORMER = (() => {
   let warpTimer = 0;
   let warpTargetLevel = -1;
   let warpTargetPipe = 0;
+  let bossDefeatTimer = 0; // celebration timer after boss death
 
   /* ── ? Block Coin Animations ── */
   let qblockAnims = []; // { x, y, vy, life } flying coins / items
@@ -395,7 +573,13 @@ const PLATFORMER = (() => {
       stateTimer: 0,
       hidden: true,
     }));
-    powerUps = levelData.powerUps.map(p => ({ x:p.x, y:groundY - T*3, type:p.type, collected:false, bobOff:Math.random()*Math.PI*2 }));
+    powerUps = levelData.powerUps.map(p => ({
+      x:p.x, y:groundY - T*3, type:p.type, collected:false,
+      bobOff:Math.random()*Math.PI*2,
+      groundWalker: p.type === 'mushroom' || p.type === 'bread',
+      vx: (p.type === 'mushroom' || p.type === 'bread') ? 2 : 0,
+      vy: 0,
+    }));
 
     // Reset global arrays
     hammers = [];
@@ -432,6 +616,9 @@ const PLATFORMER = (() => {
 
     // ── Warp Pipes ──
     warpPipes = [];
+    if (levelData.warpPipes) {
+      warpPipes = levelData.warpPipes.map(wp => ({ ...wp }));
+    }
     enteringPipe = false;
     pipeTimer = 0;
     warpTransition = false;
@@ -473,9 +660,13 @@ const PLATFORMER = (() => {
       currentBoss = null;
     }
 
-    state='playing';
+    // Countdown before playing
+    countdownTimer = 90; // ~1.5 seconds at 60fps (3 frames per number: 3-2-1-Go!)
+    state = 'countdown';
     if (raf) cancelAnimationFrame(raf);
     _loop();
+    // Start Mario main theme on level load
+    setTimeout(() => { AUDIO_MUSIC.playMainTheme(); }, 200);
   }
 
   function _tryJump() {
@@ -509,6 +700,16 @@ const PLATFORMER = (() => {
       bounce: 0,
     });
     AUDIO.playTick();
+    _playFireballSound();
+  }
+
+  function _playFireballSound() {
+    const ctx = _getAudioCtx();
+    const t = ctx.currentTime + 0.02;
+    // Short bright swoosh — two quick high notes
+    _playNote('F6', 0.06, t, 0.06, 'square');
+    _playNote('E6', 0.05, t + 0.04, 0.04, 'square');
+    _playNote('C#6', 0.08, t + 0.08, 0.03, 'square');
   }
 
   /* ─────────────────────────────────────────
@@ -525,8 +726,25 @@ const PLATFORMER = (() => {
   ───────────────────────────────────────── */
   function _update() {
     frameCount++;
+
+    // ── Countdown ──
+    if (state === 'countdown') {
+      countdownTimer--;
+      if (countdownTimer <= 0) {
+        state = 'playing';
+      }
+      // Still update particles during countdown
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.vx; p.y += p.vy; p.vy += 0.25;
+        p.life--;
+        if (p.life <= 0) particles.splice(i, 1);
+      }
+      return;
+    }
+
     if (invincible > 0) invincible--;
-    if (P.starTimer > 0) P.starTimer--;
+    if (P.starTimer > 0) { P.starTimer--; if (P.starTimer === 0) AUDIO_MUSIC.stopStarman(); }
     if (screenShake > 0) screenShake -= 0.6;
     const H = canvas.height;
     const groundY = H - T;
@@ -751,7 +969,7 @@ const PLATFORMER = (() => {
           // Star power kills enemies on touch
           e.stomped=true; e.stompTimer=0;
           screenShake = 4;
-          AUDIO.playWin();
+          AUDIO_MUSIC.playCoin();
           _spawnParticles(e.x+e.w/2, e.y, '#FFD700', 10, 'star');
           score += 150;
         } else if (P.vy>0.5 && P.y+P.h < e.y+e.h*0.5 && e.type!=='spiny' && e.type!=='lakitu') {
@@ -759,7 +977,7 @@ const PLATFORMER = (() => {
           P.vy = -9;
           score += 150;
           screenShake = 4;
-          AUDIO.playWin();
+          AUDIO_MUSIC.playCoin();
           _spawnParticles(e.x+e.w/2, e.y, '#FFD700', 10, 'star');
         } else if (invincible===0) {
           // Player takes damage
@@ -778,7 +996,7 @@ const PLATFORMER = (() => {
             invincible = 110;
             screenShake = 8;
             lives--;
-            AUDIO.playTick();
+            AUDIO_MUSIC.playDeath();
             if (lives<=0) { _playerDie(); }
           }
         }
@@ -790,21 +1008,56 @@ const PLATFORMER = (() => {
       if (c.collected) continue;
       if (_overlap(P, {x:c.x+T*0.2,y:c.y,w:T*0.55,h:T*0.55})) {
         c.collected=true; coinCount++; score+=10;
-        AUDIO.playTick();
+        AUDIO_MUSIC.playCoin();
         _spawnParticles(c.x+T*0.4, c.y, '#F5C842', 8, 'coin');
       }
     }
 
     // ── Power-ups ──
+    const groundY2 = canvas.height - T;
     for (const pu of powerUps) {
       if (pu.collected) continue;
+
+      // Ground-walking powerups (mushroom/bread from ? blocks)
+      if (pu.groundWalker) {
+        // Apply gravity to fall to ground
+        pu.vy += GRAVITY * 0.5;
+        pu.x += pu.vx;
+        pu.y += pu.vy;
+        // Ground collision
+        if (pu.y + T*0.7 >= groundY2) {
+          pu.y = groundY2 - T*0.72;
+          pu.vy = 0;
+        }
+        // Platform collision
+        for (const p of levelData.platforms) {
+          const px=p.x*T, py=p.y*T, pw=p.w*T;
+          if (pu.x+T*0.8>px+2 && pu.x<px+pw-2 && pu.y+T*0.7>=py-1 && pu.y+T*0.7<=py+T+4 && pu.vy>=0) {
+            pu.y = py - T*0.72;
+            pu.vy = 0;
+          }
+        }
+        // Bounce off edges
+        if (pu.x < 2) { pu.x = 2; pu.vx = -pu.vx; }
+        if (pu.x + T*0.8 > levelData.width * T - 2) { pu.x = levelData.width * T - T*0.8 - 2; pu.vx = -pu.vx; }
+        // Bounce off platforms
+        for (const p of levelData.platforms) {
+          const px=p.x*T, py=p.y*T, pw=p.w*T;
+          if (Math.abs(pu.y+T*0.72 - py) < 4 && pu.x+T*0.8>px && pu.x<px+pw) {
+            // Check edge
+            if (pu.vx>0 && pu.x+T*0.8+5>=px+pw) { pu.vx = -pu.vx; break; }
+            if (pu.vx<0 && pu.x-5<=px)           { pu.vx = -pu.vx; break; }
+          }
+        }
+      }
+
       if (_overlap(P, {x:pu.x,y:pu.y,w:T*0.8,h:T*0.8})) {
         pu.collected=true;
         if (pu.type==='bread' || pu.type==='mushroom') { P.big=true; score+=200; }
         else if (pu.type==='tea') { lives=Math.min(lives+1,5); score+=300; }
         else if (pu.type==='flower') { P.big=true; P.hasFire=true; score+=250; }
-        else if (pu.type==='star') { P.starTimer=600; invincible=600; score+=500; }
-        AUDIO.playWin();
+        else if (pu.type==='star') { P.starTimer=600; invincible=600; score+=500; AUDIO_MUSIC.playStarman(); }
+        AUDIO_MUSIC.playPowerup();
         _spawnParticles(pu.x+T*0.4, pu.y, pu.type==='bread'||pu.type==='mushroom'?'#D4A017':pu.type==='tea'?'#5DADE2':pu.type==='flower'?'#FF6B35':pu.type==='star'?'#FFD700':'#D4A017', 12, 'star');
       }
     }
@@ -894,7 +1147,7 @@ const PLATFORMER = (() => {
         }
         if (P.hasFire) { P.hasFire = false; invincible = 110; screenShake = 8; AUDIO.playTick(); }
         else if (P.big) { P.big = false; invincible = 110; screenShake = 8; AUDIO.playTick(); }
-        else { invincible = 110; screenShake = 8; lives--; AUDIO.playTick(); if (lives<=0) _playerDie(); }
+        else { invincible = 110; screenShake = 8; lives--; AUDIO_MUSIC.playDeath(); if (lives<=0) _playerDie(); }
         hammers.splice(i,1);
       }
     }
@@ -943,7 +1196,7 @@ const PLATFORMER = (() => {
           // Star power damages boss
           b.hp--;
           screenShake = 6;
-          AUDIO.playWin();
+          AUDIO_MUSIC.playCoin();
           _spawnParticles(b.x + b.w / 2, b.y, '#FFD700', 12, 'star');
           score += 200;
           if (b.hp <= 0) {
@@ -951,7 +1204,7 @@ const PLATFORMER = (() => {
             b.dead = true;
             b.deathTimer = 0;
             screenShake = 14;
-            AUDIO.playWin();
+            AUDIO_MUSIC.playFlagpole();
             _spawnParticles(b.x + b.w / 2, b.y + b.h / 2, '#FF6B35', 30, 'star');
           }
         } else if (P.vy > 0.5 && P.y + P.h < b.y + b.h * 0.35) {
@@ -959,7 +1212,7 @@ const PLATFORMER = (() => {
           b.hp--;
           P.vy = -10;
           screenShake = 8;
-          AUDIO.playWin();
+          AUDIO_MUSIC.playCoin();
           _spawnParticles(b.x + b.w / 2, b.y, '#FFD700', 15, 'star');
           score += 300;
           if (b.hp <= 0) {
@@ -973,7 +1226,7 @@ const PLATFORMER = (() => {
         } else if (invincible === 0) {
           if (P.hasFire) { P.hasFire = false; invincible = 110; screenShake = 8; AUDIO.playTick(); }
           else if (P.big) { P.big = false; invincible = 110; screenShake = 8; AUDIO.playTick(); }
-          else { invincible = 110; screenShake = 8; lives--; AUDIO.playTick(); if (lives <= 0) _playerDie(); }
+          else { invincible = 110; screenShake = 8; lives--; AUDIO_MUSIC.playDeath(); if (lives <= 0) _playerDie(); }
         }
       }
     }
@@ -991,7 +1244,9 @@ const PLATFORMER = (() => {
         );
       }
       if (currentBoss.deathTimer === 120) {
-        // Boss fully dead — allow level complete
+        // Boss fully dead — start celebration
+        score += 1000; // Boss defeat bonus
+        bossDefeatTimer = 90; // show celebration for ~1.5 seconds
         currentBoss.dead = false;
         currentBoss = { ...currentBoss, alive: false, hp: 0 };
       }
@@ -1038,7 +1293,7 @@ const PLATFORMER = (() => {
         }
         if (P.hasFire) { P.hasFire = false; invincible = 110; screenShake = 8; AUDIO.playTick(); }
         else if (P.big) { P.big = false; invincible = 110; screenShake = 8; AUDIO.playTick(); }
-        else { invincible = 110; screenShake = 8; lives--; AUDIO.playTick(); if (lives <= 0) _playerDie(); }
+        else { invincible = 110; screenShake = 8; lives--; AUDIO_MUSIC.playDeath(); if (lives <= 0) _playerDie(); }
         bossFireballs.splice(i, 1);
       }
     }
@@ -1050,7 +1305,7 @@ const PLATFORMER = (() => {
         if (_overlap(fb, currentBoss)) {
           currentBoss.hp--;
           screenShake = 6;
-          AUDIO.playWin();
+          AUDIO_MUSIC.playCoin();
           _spawnParticles(currentBoss.x + currentBoss.w / 2, currentBoss.y, '#FF6B35', 10, 'star');
           score += 200;
           fireballs.splice(i, 1);
@@ -1059,12 +1314,104 @@ const PLATFORMER = (() => {
             currentBoss.dead = true;
             currentBoss.deathTimer = 0;
             screenShake = 14;
-            AUDIO.playWin();
+            AUDIO_MUSIC.playFlagpole();
             _spawnParticles(currentBoss.x + currentBoss.w / 2, currentBoss.y + currentBoss.h / 2, '#FF6B35', 30, 'star');
             _spawnParticles(currentBoss.x + currentBoss.w / 2, currentBoss.y + currentBoss.h / 2, '#FFD700', 20, 'star');
           }
           break;
         }
+      }
+    }
+
+    // ── ? Block Hit Logic ──
+    if (!P.dead) {
+      for (const qb of qblocks) {
+        if (qb.hit) continue;
+        // Player hitting from below (head bump)
+        if (P.vy < 0 && P.y + 5 < qb.y + T && P.y + P.h > qb.y &&
+            P.x + P.w > qb.x + 2 && P.x < qb.x + T - 2) {
+          qb.hit = true;
+          AUDIO_MUSIC.playCoin();
+          if (qb.type === 'coin') {
+            coinCount++;
+            score += 50;
+            qblockAnims.push({ x: qb.x + T/2, y: qb.y - 8, vy: -6, life: 20, type: 'coin' });
+            _spawnParticles(qb.x + T/2, qb.y, '#F5C842', 6, 'coin');
+          } else if (qb.type === 'mushroom' || qb.type === 'flower' || qb.type === 'star' || qb.type === 'bread' || qb.type === 'tea') {
+            // Spawn a power-up from the ? block
+            const isWalker = qb.type === 'mushroom' || qb.type === 'bread';
+            const newPu = {
+              x: qb.x, y: qb.y - T, type: qb.type, collected: false,
+              bobOff: Math.random() * Math.PI * 2,
+              groundWalker: isWalker,
+              vx: isWalker ? 2 : 0, vy: isWalker ? 0 : 0,
+            };
+            powerUps.push(newPu);
+            qblockAnims.push({ x: qb.x + T/2, y: qb.y - 8, vy: -4, life: 15, type: 'pop' });
+            _spawnParticles(qb.x + T/2, qb.y, '#FFD700', 8, 'star');
+          }
+        }
+      }
+    }
+
+    // ── ? Block Animations ──
+    for (let i = qblockAnims.length - 1; i >= 0; i--) {
+      const a = qblockAnims[i];
+      a.y += a.vy;
+      a.vy += 0.3;
+      a.life--;
+      if (a.life <= 0) qblockAnims.splice(i, 1);
+    }
+
+    // ── Pipe Entry / Warp Logic ──
+    if (!P.dead && !warpTransition) {
+      if (P.onGround && K.down && !enteringPipe) {
+        for (const wp of warpPipes) {
+          const pipeGroundY = H - T;
+          const pipeH = T * 2;
+          const pipeTop = pipeGroundY - pipeH;
+          if (P.x + P.w > wp.x && P.x < wp.x + wp.w &&
+              P.y + P.h >= pipeTop && P.y + P.h <= pipeGroundY) {
+            enteringPipe = true;
+            pipeTimer = 0;
+            break;
+          }
+        }
+      }
+      if (enteringPipe) {
+        // Move player downward into pipe
+        P.y += 2;
+        P.vx = 0;
+        pipeTimer++;
+        if (pipeTimer > 30) {
+          // Find which warp pipe we entered
+          for (const wp of warpPipes) {
+            const pipeGroundY = H - T;
+            const pipeH = T * 2;
+            const pipeTop = pipeGroundY - pipeH;
+            if (P.x + P.w > wp.x && P.x < wp.x + wp.w &&
+                P.y + P.h >= pipeTop && P.y + P.h <= pipeGroundY + 10) {
+              warpTargetLevel = wp.targetLevel;
+              break;
+            }
+          }
+          warpTransition = true;
+          warpTimer = 0;
+          enteringPipe = false;
+        }
+      }
+    }
+
+    // ── Warp Transition ──
+    if (warpTransition) {
+      warpTimer++;
+      if (warpTimer > 30) {
+        if (warpTargetLevel >= 0 && warpTargetLevel < LEVELS.length) {
+          _loadLevel(warpTargetLevel);
+        }
+        warpTransition = false;
+        warpTimer = 0;
+        warpTargetLevel = -1;
       }
     }
 
@@ -1076,13 +1423,33 @@ const PLATFORMER = (() => {
       if (p.life<=0) particles.splice(i,1);
     }
 
+    // ── Starman Trail Particles ──
+    if (!P.dead && P.starTimer > 0 && frameCount % 3 === 0) {
+      const trailColors = ['#FFD700','#FFA500','#FF6B35','#FFE066','#FFF'];
+      const ci = Math.floor(frameCount/6) % trailColors.length;
+      particles.push({
+        x: P.x + P.w/2 + (Math.random()-0.5)*6,
+        y: P.y + P.h/2 + (Math.random()-0.5)*6,
+        vx: (Math.random()-0.5)*2,
+        vy: -1 - Math.random()*2,
+        color: trailColors[ci],
+        life: 20 + Math.floor(Math.random()*8),
+        maxLife: 28,
+        size: 3 + Math.floor(Math.random()*3),
+        type: 'star',
+      });
+    }
+
+    // ── Boss Defeat Celebration Timer ──
+    if (bossDefeatTimer > 0) bossDefeatTimer--;
+
     // ── Goal ──
     const gx = levelData.goal * T;
     const bossAlive = currentBoss && currentBoss.alive;
     if (!P.dead && P.x+P.w>gx && P.x<gx+T*2.5 && !bossAlive) {
       score += 500 + coinCount*5;
       state  = 'levelcomplete';
-      AUDIO.playWin();
+      AUDIO_MUSIC.playFlagpole();
       setTimeout(() => {
         if (level+1 < LEVELS.length) _loadLevel(level+1);
         else { state='win'; _render(); }
@@ -1090,7 +1457,7 @@ const PLATFORMER = (() => {
     }
   }
 
-  function _playerDie() { P.dead=true; P.vy=-11; P.deathTimer=0; screenShake=12; }
+  function _playerDie() { P.dead=true; P.vy=-11; P.deathTimer=0; screenShake=12; AUDIO_MUSIC.stopTheme(); AUDIO_MUSIC.stopStarman(); }
 
   /* ─────────────────────────────────────────
      COLLISION
@@ -1171,6 +1538,7 @@ const PLATFORMER = (() => {
 
     _drawGround(H);
     for (const p of levelData.platforms) _drawPlatform(p.x*T, p.y*T, p.w*T, p.type, H);
+    for (const qb of qblocks) _drawQBlock(qb);
     for (const pu of powerUps)           { if (!pu.collected) _drawPowerUp(pu); }
     for (const c of currentCoins)        { if (!c.collected)  _drawCoin(c.x, c.y, c.bobOff); }
     _drawGoal(levelData.goal*T, H);
@@ -1178,6 +1546,8 @@ const PLATFORMER = (() => {
     if (levelData.pipes) {
       for (const pipe of levelData.pipes) _drawPipe(pipe.x, H, pipe.w);
     }
+    // Draw warp pipes
+    for (const wp of warpPipes) _drawPipe(wp.x, H, wp.w);
     for (const e of currentEnemies)      { if (e.alive) _drawEnemy(e); }
 
     // Particles
@@ -1247,6 +1617,8 @@ const PLATFORMER = (() => {
     if (state==='gameover')      _drawEndScreen(W,H,false);
     if (state==='win')           _drawEndScreen(W,H,true);
     if (state==='levelcomplete') _drawLevelComplete(W,H);
+    if (state==='countdown')     _drawCountdownOverlay(W,H);
+    if (bossDefeatTimer > 0)     _drawBossDefeatOverlay(W,H);
   }
 
   /* ─────────────────────────────────────────
@@ -1263,6 +1635,10 @@ const PLATFORMER = (() => {
       ctx.fillRect(x,y,1+(twinkle>0.8?1:0),1+(twinkle>0.8?1:0));
     }
     ctx.globalAlpha=1;
+    // Big glowing night star
+    if (levelData && levelData.night) {
+      _drawNightStar(W,H);
+    }
   }
 
   function _drawSun(W,H) {
@@ -1277,6 +1653,38 @@ const PLATFORMER = (() => {
     ctx.beginPath(); ctx.arc(sx,sy,sr,0,Math.PI*2); ctx.fill();
     ctx.fillStyle='#FBBF24';
     ctx.beginPath(); ctx.arc(sx,sy,sr*0.7,0,Math.PI*2); ctx.fill();
+  }
+
+  /* ── Big Night Star ── */
+  function _drawNightStar(W,H) {
+    const sx=W*0.1, sy=H*0.1;
+    const pulse = Math.sin(frameCount*0.04)*1.5;
+    const r = 12 + pulse;
+    // Outer glow
+    const g = ctx.createRadialGradient(sx,sy,0,sx,sy,r*4);
+    g.addColorStop(0,'rgba(255,220,100,0.25)');
+    g.addColorStop(0.5,'rgba(200,200,255,0.1)');
+    g.addColorStop(1,'rgba(200,200,255,0)');
+    ctx.fillStyle=g; ctx.beginPath(); ctx.arc(sx,sy,r*4,0,Math.PI*2); ctx.fill();
+    // Star body
+    ctx.fillStyle='#FFFDE7';
+    ctx.beginPath();
+    for (let i=0;i<4;i++){
+      const a=i*Math.PI/4+Math.PI/8;
+      if(i===0) ctx.moveTo(sx+Math.cos(a)*r*1.5,sy+Math.sin(a)*r*1.5);
+      else ctx.lineTo(sx+Math.cos(a)*r*1.5,sy+Math.sin(a)*r*1.5);
+      const ia=a+Math.PI/8;
+      ctx.lineTo(sx+Math.cos(ia)*r*0.6,sy+Math.sin(ia)*r*0.6);
+    }
+    ctx.closePath(); ctx.fill();
+    // Inner core
+    ctx.fillStyle='#FFF9C4';
+    ctx.beginPath(); ctx.arc(sx,sy,r*0.4,0,Math.PI*2); ctx.fill();
+    // Sparkles
+    ctx.fillStyle='rgba(255,255,255,0.6)';
+    const sparkle = Math.sin(frameCount*0.1);
+    if (sparkle>0.3) ctx.fillRect(sx+r*1.2,sy-r*0.5,2,2);
+    if (sparkle<-0.3) ctx.fillRect(sx-r*1.3,sy+r*0.3,2,2);
   }
 
   function _drawClouds(W,H) {
@@ -1447,7 +1855,7 @@ const PLATFORMER = (() => {
   }
 
   function _drawPowerUp(pu) {
-    const bob=Math.sin(frameCount*0.08+pu.bobOff)*4;
+    const bob = pu.groundWalker ? 0 : Math.sin(frameCount*0.08+pu.bobOff)*4;
     const x=pu.x, y=pu.y+bob;
     const s=T*0.72;
     // Glow
@@ -2203,35 +2611,98 @@ const PLATFORMER = (() => {
   }
 
   function _drawPipe(px, H, pw) {
-    // Green pipe for piranha plants
+    // Green pipe with oval rim — supports both regular pipes and warp pipes
     const groundY = H - T;
     const pipeH = T * 2;
     const py = groundY - pipeH;
+    // Shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.15)';
+    ctx.fillRect(px + 3, py + 3, pw, pipeH);
     // Pipe body
-    const pipeGrad = ctx.createLinearGradient(px, py, px+pw, py);
+    const pipeGrad = ctx.createLinearGradient(px, py, px + pw, py);
     pipeGrad.addColorStop(0, '#4CAF50');
     pipeGrad.addColorStop(0.3, '#66BB6A');
     pipeGrad.addColorStop(0.7, '#43A047');
     pipeGrad.addColorStop(1, '#388E3C');
     ctx.fillStyle = pipeGrad;
     ctx.fillRect(px, py, pw, pipeH);
-    // Pipe rim (top)
-    ctx.fillStyle = '#388E3C';
-    ctx.fillRect(px-4, py-4, pw+8, 6);
-    const rimGrad = ctx.createLinearGradient(px-4, py-4, px-4, py+2);
+    // Highlight on left
+    ctx.fillStyle = 'rgba(255,255,255,0.12)';
+    ctx.fillRect(px + 2, py + 4, 4, pipeH - 8);
+    // Shadow on right
+    ctx.fillStyle = 'rgba(0,0,0,0.12)';
+    ctx.fillRect(px + pw - 5, py + 4, 4, pipeH - 8);
+    // Oval rim (top edge with elliptical border)
+    const rimY = py - 4;
+    const rimH = 8;
+    ctx.fillStyle = '#2E7D32';
+    ctx.beginPath();
+    ctx.ellipse(px + pw / 2, rimY + rimH / 2, pw / 2 + 4, rimH / 2 + 1, 0, 0, Math.PI * 2);
+    ctx.fill();
+    const rimGrad = ctx.createLinearGradient(px - 4, rimY, px - 4, rimY + rimH);
     rimGrad.addColorStop(0, '#66BB6A');
-    rimGrad.addColorStop(1, '#2E7D32');
+    rimGrad.addColorStop(1, '#388E3C');
     ctx.fillStyle = rimGrad;
-    ctx.fillRect(px-4, py-4, pw+8, 6);
-    // Dark inside
+    ctx.beginPath();
+    ctx.ellipse(px + pw / 2, rimY + rimH / 2, pw / 2 + 4, rimH / 2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // Inner dark hole
     ctx.fillStyle = '#1B5E20';
-    ctx.fillRect(px+2, py-2, pw-4, 4);
-    // Highlight
-    ctx.fillStyle = 'rgba(255,255,255,0.15)';
-    ctx.fillRect(px+2, py+2, 5, pipeH-4);
-    // Shadow
-    ctx.fillStyle = 'rgba(0,0,0,0.15)';
-    ctx.fillRect(px+pw-6, py+2, 5, pipeH-4);
+    ctx.beginPath();
+    ctx.ellipse(px + pw / 2, rimY + rimH / 2 - 1, pw / 2 - 2, rimH / 2 - 2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // Top highlight
+    ctx.fillStyle = 'rgba(255,255,255,0.2)';
+    ctx.beginPath();
+    ctx.ellipse(px + pw / 2 - pw * 0.15, rimY + rimH / 2 - 2, pw * 0.25, 2, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  /* ─────────────────────────────────────────
+     ? BLOCK DRAWING
+  ───────────────────────────────────────── */
+  function _drawQBlock(qb) {
+    const x = qb.x, y = qb.y, hit = qb.hit;
+    if (hit) {
+      // Hit / empty block — greyed out, no shine
+      ctx.fillStyle = '#8B7355';
+      ctx.fillRect(x, y, T, T);
+      ctx.strokeStyle = '#6B5335';
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(x, y, T, T);
+      // Inner dark
+      ctx.fillStyle = '#6B5335';
+      ctx.fillRect(x + 3, y + 3, T - 6, T - 6);
+      return;
+    }
+    // Glow animation
+    const pulse = Math.sin(frameCount * 0.08) * 0.2 + 0.8;
+    // Yellow box
+    const qg = ctx.createLinearGradient(x, y, x, y + T);
+    qg.addColorStop(0, '#F5C842');
+    qg.addColorStop(0.5, '#FFE066');
+    qg.addColorStop(1, '#C8980A');
+    ctx.fillStyle = qg;
+    ctx.beginPath();
+    ctx.roundRect(x, y, T, T, 3);
+    ctx.fill();
+    // Border
+    ctx.strokeStyle = '#A07008';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.roundRect(x, y, T, T, 3);
+    ctx.stroke();
+    // Shine
+    ctx.fillStyle = 'rgba(255,255,255,0.25)';
+    ctx.fillRect(x + 2, y + 2, T - 4, 4);
+    // ? mark
+    ctx.fillStyle = '#FFF';
+    ctx.globalAlpha = pulse;
+    ctx.font = `bold ${Math.round(T * 0.7)}px Cairo,Arial`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('?', x + T / 2, y + T / 2 + 1);
+    ctx.globalAlpha = 1;
   }
 
   /* ─────────────────────────────────────────
@@ -2417,6 +2888,51 @@ const PLATFORMER = (() => {
   /* ─────────────────────────────────────────
      SCREENS
   ───────────────────────────────────────── */
+  function _drawCountdownOverlay(W,H) {
+    // Semi-transparent overlay
+    ctx.fillStyle='rgba(0,0,0,0.45)'; ctx.fillRect(0,0,W,H);
+    ctx.textAlign='center';
+    ctx.textBaseline='middle';
+
+    const remaining = Math.ceil(countdownTimer / 30); // 3, 2, 1
+    const display = remaining > 3 ? '3' : remaining > 2 ? '2' : remaining > 1 ? '1' : 'ابدأ!';
+    const fontSize = display === 'ابدأ!' ? Math.round(W*0.1) : Math.round(W*0.14);
+    const col = display === 'ابدأ!' ? '#2ECC71' : '#F5C842';
+
+    ctx.shadowColor=col; ctx.shadowBlur=30;
+    ctx.fillStyle=col;
+    ctx.font=`bold ${fontSize}px Cairo,Arial`;
+    ctx.fillText(display, W/2, H/2);
+    ctx.shadowBlur=0;
+  }
+
+  /* ── Boss Defeat Celebration ── */
+  function _drawBossDefeatOverlay(W,H) {
+    ctx.fillStyle='rgba(0,0,0,0.65)'; ctx.fillRect(0,0,W,H);
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    const pulse = Math.sin(frameCount*0.08)*2;
+    // Emoji celebration
+    ctx.font=`${Math.round(W*0.13)}px serif`;
+    ctx.fillStyle='#FFD700';
+    const emojis = ['🎉','🎊','🌟','✨','🎉'];
+    const ei = Math.floor(frameCount/8)%emojis.length;
+    ctx.fillText(emojis[ei]+' '+emojis[(ei+1)%emojis.length]+' '+emojis[(ei+2)%emojis.length], W/2, H*0.32+pulse);
+    // Text
+    ctx.shadowColor='#FFD700'; ctx.shadowBlur=20;
+    ctx.font=`bold ${Math.round(W*0.07)}px Cairo,Arial`;
+    ctx.fillStyle='#F5C842';
+    ctx.fillText('🔥 هزمت التنين! 🔥', W/2, H*0.47);
+    ctx.shadowBlur=0;
+    // Score bonus
+    ctx.font=`${Math.round(W*0.045)}px Cairo,Arial`;
+    ctx.fillStyle='#FFF';
+    ctx.fillText(`⭐ +1000 نقطة مكافأة`, W/2, H*0.57);
+    // Hint
+    ctx.fillStyle='rgba(255,255,255,0.5)';
+    ctx.font=`${Math.round(W*0.03)}px Cairo,Arial`;
+    ctx.fillText('اذهب إلى العلم لإكمال المستوى ➡️', W/2, H*0.67);
+  }
+
   function _drawStartScreen(W,H) {
     ctx.fillStyle='rgba(0,0,0,0.82)'; ctx.fillRect(0,0,W,H);
     ctx.textAlign='center';
