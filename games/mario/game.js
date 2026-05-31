@@ -12,10 +12,10 @@ const PLATFORMER = (() => {
   const RUN_SPD = 3.8;
   const FRICTION = 0.74;
 
-  /* ── AUDIO: Mario Music System (NES-style via Web Audio API) ── */
+  /* ── AUDIO: Mario Music System v3 (Single Oscillator — Smooth) ── */
   let audioCtx = null;
   let audioThemeTimer = null;
-  let audioThemeNotes = [];
+  let audioThemeInterval = null;
 
   function _getAudioCtx() {
     if (!audioCtx) {
@@ -26,6 +26,7 @@ const PLATFORMER = (() => {
   }
 
   function _noteToFreq(note) {
+    if (!note || note === 'R' || note === 'REST') return null;
     const map = { 'C':0,'C#':1,'Db':1,'D':2,'D#':3,'Eb':3,'E':4,'F':5,'F#':6,'Gb':6,'G':7,'G#':8,'Ab':8,'A':9,'A#':10,'Bb':10,'B':11 };
     const m = note.match(/^([A-G]#?b?)(\d+)$/);
     if (!m) return null;
@@ -35,41 +36,93 @@ const PLATFORMER = (() => {
     return 440 * Math.pow(2, (oct - 4 + (semitone - 9) / 12));
   }
 
-  function _playNote(note, duration, startTime, gainVal, type) {
-    if (!note) return;
+  /* ── Single-oscillator melody player (no pop, no stutter) ── */
+  let _melodyOsc = null;
+  let _melodyGain = null;
+  let _melodyNotes = [];
+  let _melodyIdx = 0;
+  let _melodyBPM = 150;
+  let _melodyTimer = null;
+  let _melodyVol = 0;
+
+  function _playMelodySimple(notes, durations, bpm, vol) {
+    _stopMelody();
+    if (!notes || notes.length === 0) return;
+    const ctx = _getAudioCtx();
+    _melodyNotes = notes;
+    _melodyBPM = bpm;
+    _melodyIdx = 0;
+    _melodyVol = vol || 0.08;
+
+    _melodyOsc = ctx.createOscillator();
+    _melodyGain = ctx.createGain();
+    _melodyOsc.type = 'square';
+    _melodyOsc.frequency.value = _noteToFreq(notes[0]) || 261;
+    _melodyGain.gain.setValueAtTime(0.001, ctx.currentTime);
+    _melodyGain.gain.linearRampToValueAtTime(_melodyVol, ctx.currentTime + 0.02);
+    _melodyOsc.connect(_melodyGain);
+    _melodyGain.connect(ctx.destination);
+    _melodyOsc.start();
+
+    let noteIdx = 0;
+    const beat = 60 / bpm;
+    const tickMs = (durations[0] || 0.25) * beat * 1000;
+
+    function _tick() {
+      if (noteIdx >= notes.length) { _stopMelody(); return; }
+      const freq = _noteToFreq(notes[noteIdx]);
+      const dur = durations[noteIdx] * beat;
+      if (freq && _melodyOsc) {
+        _melodyOsc.frequency.setTargetAtTime(freq, ctx.currentTime, 0.004);
+        _melodyGain.gain.setTargetAtTime(_melodyVol, ctx.currentTime, 0.01);
+      } else {
+        _melodyGain.gain.setTargetAtTime(0.001, ctx.currentTime, 0.005);
+      }
+      noteIdx++;
+      if (noteIdx < notes.length) {
+        const nextMs = Math.max(30, durations[noteIdx] * beat * 1000);
+        _melodyTimer = setTimeout(_tick, nextMs);
+      } else {
+        // Fade out at end
+        if (_melodyGain) _melodyGain.gain.setTargetAtTime(0.001, ctx.currentTime, 0.05);
+        _melodyTimer = setTimeout(() => _stopMelody(), 200);
+      }
+    }
+    _melodyTimer = setTimeout(_tick, tickMs);
+  }
+
+  function _stopMelody() {
+    if (_melodyTimer) { clearTimeout(_melodyTimer); _melodyTimer = null; }
+    if (_melodyOsc) {
+      try {
+        if (_melodyGain) _melodyGain.gain.setTargetAtTime(0.001, audioCtx.currentTime, 0.02);
+        setTimeout(() => {
+          try { _melodyOsc.stop(); } catch(e) {}
+          _melodyOsc = null; _melodyGain = null;
+        }, 100);
+      } catch(e) { _melodyOsc = null; _melodyGain = null; }
+    }
+  }
+
+  /* ── Jump sound (short chirp — single note, fast) ── */
+  function _playChirp(note, dur, vol) {
     const ctx = _getAudioCtx();
     const freq = _noteToFreq(note);
     if (!freq) return;
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
-    osc.type = type || 'square';
+    osc.type = 'square';
     osc.frequency.value = freq;
-    gain.gain.setValueAtTime(gainVal || 0.12, startTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start(startTime);
-    osc.stop(startTime + duration);
+    gain.gain.setValueAtTime(vol || 0.06, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dur);
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + dur);
   }
 
-  function _playSequence(notes, durations, gain, type) {
-    const ctx = _getAudioCtx();
-    let t = ctx.currentTime + 0.02;
-    for (let i = 0; i < notes.length; i++) {
-      if (notes[i] && notes[i] !== 'R' && notes[i] !== 'REST') {
-        _playNote(notes[i], durations[i], t, gain, type);
-      }
-      t += durations[i];
-    }
-  }
-
-  /* ── Mario Main Theme (Ground Theme) ── */
+  /* ── Mario Main Theme ── */
   function playMainTheme() {
     stopTheme();
-    const ctx = _getAudioCtx();
-    const bpm = 150;
-    const beat = 60 / bpm;
-
     const notes = [
       'E4','E4','R','E4','R','C4','E4','R','G4','R','R','R',
       'G4','R','R','R','C4','R','R','G4','R','R','E4','R',
@@ -77,7 +130,6 @@ const PLATFORMER = (() => {
       'A4','F4','G4','E4','R','C4','D4','B3','R','R','C4','R','R',
       'R','R','G4','R','R','F4','E4','D4','R','C4','R','R','R'
     ];
-    // durations in beats
     const durs = [
       0.25,0.25,0.125,0.25,0.125,0.25,0.25,0.125,0.5,0.125,0.125,0.125,
       0.5,0.125,0.125,0.125,0.5,0.125,0.125,0.5,0.125,0.125,0.5,0.125,
@@ -85,62 +137,37 @@ const PLATFORMER = (() => {
       0.25,0.25,0.25,0.5,0.125,0.25,0.25,0.5,0.125,0.125,0.5,0.125,0.125,
       0.125,0.125,0.5,0.125,0.125,0.25,0.25,0.25,0.125,0.5,0.125,0.125,0.125
     ];
-
-    audioThemeNotes = [];
-    let t = ctx.currentTime + 0.05;
-    for (let i = 0; i < notes.length; i++) {
-      const d = durs[i] * beat;
-      if (notes[i] && notes[i] !== 'R' && notes[i] !== 'REST') {
-        audioThemeNotes.push({ note: notes[i], time: t, dur: d });
-        _playNote(notes[i], d, t, 0.10, 'square');
-      }
-      t += d;
-    }
-    // loop: schedule next iteration after last note ends
-    audioThemeTimer = setTimeout(() => { playMainTheme(); }, (t - ctx.currentTime) * 1000);
+    _playMelodySimple(notes, durs, 150, 0.08);
+    // Schedule loop
+    const totalMs = durs.reduce((s,d,i) => s + (d * (60/150) * 1000), 0);
+    audioThemeTimer = setTimeout(() => { playMainTheme(); }, totalMs + 60);
   }
 
   function stopTheme() {
     if (audioThemeTimer) { clearTimeout(audioThemeTimer); audioThemeTimer = null; }
-    audioThemeNotes = [];
+    _stopMelody();
   }
 
-  /* ── Power-up Sound (mushroom/flower) ── */
+  /* ── Power-up Sound ── */
   function playPowerup() {
-    _playSequence(
-      ['E4','F4','G4','C5'],
-      [0.1,0.1,0.1,0.15],
-      0.12, 'square'
-    );
+    _playMelodySimple(['E4','F4','G4','C5'], [0.1,0.1,0.1,0.15], 240, 0.08);
   }
 
   /* ── Starman Theme ── */
   let starmanTimer = null;
   function playStarman() {
     stopStarman();
-    const ctx = _getAudioCtx();
-    const bpm = 200;
-    const beat = 60 / bpm;
-    // Pattern: C4 C4 C4 E4 F4 F4 F4 G4 ... repeated
     const notes = [];
     const durs = [];
     const pattern = ['C4','C4','C4','E4','F4','F4','F4','G4'];
     const durPat = [0.25,0.25,0.25,0.5,0.25,0.25,0.25,0.5];
-    // 4 repetitions = 32 notes
     for (let r = 0; r < 4; r++) {
       for (let i = 0; i < pattern.length; i++) {
         notes.push(pattern[i]);
-        durs.push(durPat[i] * beat);
+        durs.push(durPat[i]);
       }
     }
-    let t = ctx.currentTime + 0.02;
-    for (let i = 0; i < notes.length; i++) {
-      if (notes[i] !== 'R' && notes[i] !== 'REST') {
-        _playNote(notes[i], durs[i], t, 0.10, 'square');
-      }
-      t += durs[i];
-    }
-    // loop while star is active (check every ~3 sec)
+    _playMelodySimple(notes, durs, 200, 0.08);
     starmanTimer = setTimeout(() => {
       if (P && P.starTimer > 0) playStarman();
     }, 3500);
@@ -152,40 +179,36 @@ const PLATFORMER = (() => {
 
   /* ── Coin Sound ── */
   function playCoin() {
-    const ctx = _getAudioCtx();
-    const t = ctx.currentTime + 0.01;
-    _playNote('E5', 0.05, t, 0.12, 'square');
-    _playNote('C4', 0.1, t + 0.06, 0.12, 'square');
+    const t = audioCtx ? audioCtx.currentTime : 0;
+    _playChirp('E5', 0.05, 0.08);
+    setTimeout(() => _playChirp('C4', 0.1, 0.08), 60);
   }
 
   /* ── Death Sound ── */
   function playDeath() {
-    _playSequence(
-      ['C4','C4','G3','E3'],
-      [0.15,0.15,0.25,0.4],
-      0.15, 'square'
-    );
+    _playMelodySimple(['C4','C4','G3','E3'], [0.15,0.15,0.25,0.4], 180, 0.10);
   }
 
   /* ── Flagpole / Level Complete ── */
   function playFlagpole() {
-    _playSequence(
-      ['C4','E4','G4','C5','E5','C6'],
-      [0.12,0.12,0.12,0.12,0.12,0.3],
-      0.12, 'square'
-    );
+    _playMelodySimple(['C4','E4','G4','C5','E5','C6'], [0.12,0.12,0.12,0.12,0.12,0.3], 200, 0.09);
   }
 
+  let _muted = false;
+  function _setMuted(v) { _muted = v; if (v) { stopTheme(); stopStarman(); } }
+
   const AUDIO_MUSIC = {
-    playMainTheme,
+    playMainTheme:   () => { if (!_muted) playMainTheme(); },
     stopTheme,
-    playPowerup,
-    playStarman,
+    playPowerup:     () => { if (!_muted) playPowerup(); },
+    playStarman:     () => { if (!_muted) playStarman(); },
     stopStarman,
-    playCoin,
-    playDeath,
-    playFlagpole,
+    playCoin:        () => { if (!_muted) playCoin(); },
+    playDeath:       () => { if (!_muted) playDeath(); },
+    playFlagpole:    () => { if (!_muted) playFlagpole(); },
     init() { _getAudioCtx(); },
+    get muted() { return _muted; },
+    setMuted: _setMuted,
   };
 
   /* ── State ── */
@@ -523,6 +546,12 @@ const PLATFORMER = (() => {
 
     const pauseBtn = document.getElementById('p-btn-pause');
     if (pauseBtn) pauseBtn.addEventListener('click', _togglePause);
+
+    const muteBtn = document.getElementById('p-btn-mute');
+    if (muteBtn) muteBtn.addEventListener('click', () => {
+      AUDIO_MUSIC.setMuted(!AUDIO_MUSIC.muted);
+      muteBtn.textContent = AUDIO_MUSIC.muted ? '🔇' : '🔊';
+    });
   }
 
   function _dpad(id, down, up) {
@@ -539,8 +568,8 @@ const PLATFORMER = (() => {
   }
 
   function _togglePause() {
-    if (state === 'playing') { state = 'paused'; cancelAnimationFrame(raf); _render(); }
-    else if (state === 'paused') { state = 'playing'; _loop(); }
+    if (state === 'playing') { state = 'paused'; cancelAnimationFrame(raf); AUDIO_MUSIC.stopTheme(); _render(); }
+    else if (state === 'paused') { state = 'playing'; _loop(); AUDIO_MUSIC.playMainTheme(); }
   }
 
   /* ─────────────────────────────────────────
