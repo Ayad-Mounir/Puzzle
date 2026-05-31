@@ -6,7 +6,7 @@
    - فور تنشيطه يُرسل رسالة SW_UPDATED لكل النوافذ
    - العميل (utils.js) يعيد تحميل الصفحة تلقائياً
    ============================================================ */
-const CACHE_NAME = 'puzzle-v25';
+const CACHE_NAME = 'puzzle-v26';
 
 const ASSETS = [
   './',
@@ -74,7 +74,7 @@ self.addEventListener('message', (e) => {
   }
 });
 
-/* FETCH — Network-first للـ HTML، Cache-first لباقي الملفات */
+/* FETCH — Network-first للـ HTML، Network-first للـ JS/CSS (مع الكاش كخيار احتياطي لـ offline) */
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
 
@@ -92,7 +92,22 @@ self.addEventListener('fetch', (e) => {
     return;
   }
 
-  // Cache-first لباقي الملفات (CSS, JS, Icons)
+  // Network-first للـ JS/CSS — نأخذ الملف الجديد أولاً، ثم نخزنه في الكاش
+  const isStatic = /\.(js|css)$/.test(url.pathname);
+  if (isStatic) {
+    e.respondWith(
+      fetch(e.request)
+        .then(r => {
+          const clone = r.clone();
+          caches.open(CACHE_NAME).then(c => c.put(e.request, clone));
+          return r;
+        })
+        .catch(() => caches.match(e.request)) // offline fallback
+    );
+    return;
+  }
+
+  // Cache-first لباقي الملفات (Icons, Fonts, Images)
   e.respondWith(
     caches.match(e.request).then(cached => {
       if (cached) return cached;
