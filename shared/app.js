@@ -5,7 +5,7 @@
   /* ============================================================
      BOOT
   ============================================================ */
-  window.addEventListener('DOMContentLoaded', () => {
+  function boot() {
     // Hide loader
     function hideLoader() {
       var el = document.getElementById('loadingScreen');
@@ -15,14 +15,21 @@
     setTimeout(hideLoader, 3000);
 
     // Sync mute button
-    if (AUDIO.muted) {
+    if (typeof AUDIO !== 'undefined' && AUDIO.muted) {
       const btn = document.getElementById('muteBtn');
       if (btn) { btn.textContent = '🔇 الصوت'; btn.classList.add('muted'); }
     }
 
     // Start on Home Screen
-    document.getElementById('appWrapper').style.display = 'none';
-  });
+    var wrapper = document.getElementById('appWrapper');
+    if (wrapper) wrapper.style.display = 'none';
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', boot);
+  } else {
+    boot();
+  }
 
   /* ============================================================
      HOME → GAME
