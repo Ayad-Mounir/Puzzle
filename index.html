@@ -550,22 +550,6 @@
   <!-- 🔥 Auto cache-bust: loads JS with unique timestamp (sequential order preserved) -->
   <script>
     (function(){
-      // Force SW refresh — kill old cache, activate new SW immediately
-      if(navigator.serviceWorker){
-        // Unregister any existing SW first
-        navigator.serviceWorker.getRegistration().then(function(reg){
-          if(reg) reg.unregister();
-        });
-        // Reload when new SW takes over
-        navigator.serviceWorker.addEventListener('controllerchange', function(){
-          window.location.reload();
-        });
-        // Tell current SW to skip waiting
-        if(navigator.serviceWorker.controller){
-          navigator.serviceWorker.controller.postMessage({type:'SKIP_WAITING'});
-        }
-      }
-
       var ver = Date.now();
       var scripts = [
         'shared/utils.js',
