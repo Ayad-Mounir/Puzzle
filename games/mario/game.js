@@ -727,7 +727,7 @@ const PLATFORMER = (() => {
   function _loop() {
     _update();
     _render();
-    if (state === 'playing') raf = requestAnimationFrame(_loop);
+    if (state === 'playing' || state === 'countdown') raf = requestAnimationFrame(_loop);
   }
 
   /* ─────────────────────────────────────────
