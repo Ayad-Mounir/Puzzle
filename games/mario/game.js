@@ -12,15 +12,14 @@ const PLATFORMER = (() => {
   const RUN_SPD = 3.8;
   const FRICTION = 0.74;
 
-  /* ── AUDIO: Mario Music System v3 (Single Oscillator — Smooth) ── */
+  /* ── AUDIO: Mario Music System v4 — All-buffer, zero stutter ── */
   let audioCtx = null;
   let audioThemeTimer = null;
   let audioThemeInterval = null;
+  let _sourceNode = null;
 
   function _getAudioCtx() {
-    if (!audioCtx) {
-      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    }
+    if (!audioCtx) { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
     if (audioCtx.state === 'suspended') audioCtx.resume();
     return audioCtx;
   }
@@ -28,96 +27,85 @@ const PLATFORMER = (() => {
   function _noteToFreq(note) {
     if (!note || note === 'R' || note === 'REST') return null;
     const map = { 'C':0,'C#':1,'Db':1,'D':2,'D#':3,'Eb':3,'E':4,'F':5,'F#':6,'Gb':6,'G':7,'G#':8,'Ab':8,'A':9,'A#':10,'Bb':10,'B':11 };
-    const m = note.match(/^([A-G]#?b?)(\d+)$/);
-    if (!m) return null;
-    const semitone = map[m[1]];
-    if (semitone === undefined) return null;
-    const oct = parseInt(m[2]);
-    return 440 * Math.pow(2, (oct - 4 + (semitone - 9) / 12));
+    const m = note.match(/^([A-G]#?b?)(\d+)$/); if (!m) return null;
+    const semitone = map[m[1]]; if (semitone === undefined) return null;
+    return 440 * Math.pow(2, (parseInt(m[2]) - 4 + (semitone - 9) / 12));
   }
 
-  /* ── Single-oscillator melody player (no pop, no stutter) ── */
-  let _melodyOsc = null;
-  let _melodyGain = null;
-  let _melodyNotes = [];
-  let _melodyIdx = 0;
-  let _melodyBPM = 150;
-  let _melodyTimer = null;
-  let _melodyVol = 0;
-
-  function _playMelodySimple(notes, durations, bpm, vol) {
-    _stopMelody();
-    if (!notes || notes.length === 0) return;
-    const ctx = _getAudioCtx();
-    _melodyNotes = notes;
-    _melodyBPM = bpm;
-    _melodyIdx = 0;
-    _melodyVol = vol || 0.08;
-
-    _melodyOsc = ctx.createOscillator();
-    _melodyGain = ctx.createGain();
-    _melodyOsc.type = 'square';
-    _melodyOsc.frequency.value = _noteToFreq(notes[0]) || 261;
-    _melodyGain.gain.setValueAtTime(0.001, ctx.currentTime);
-    _melodyGain.gain.linearRampToValueAtTime(_melodyVol, ctx.currentTime + 0.02);
-    _melodyOsc.connect(_melodyGain);
-    _melodyGain.connect(ctx.destination);
-    _melodyOsc.start();
-
-    let noteIdx = 0;
+  /* ── Generate square-wave buffer for a melody ── */
+  function _buildMelodyBuffer(notes, durations, bpm, sampleRate) {
+    sampleRate = sampleRate || (audioCtx ? audioCtx.sampleRate : 44100);
     const beat = 60 / bpm;
-    const tickMs = (durations[0] || 0.25) * beat * 1000;
-
-    function _tick() {
-      if (noteIdx >= notes.length) { _stopMelody(); return; }
-      const freq = _noteToFreq(notes[noteIdx]);
-      const dur = durations[noteIdx] * beat;
-      if (freq && _melodyOsc) {
-        _melodyOsc.frequency.setTargetAtTime(freq, ctx.currentTime, 0.004);
-        _melodyGain.gain.setTargetAtTime(_melodyVol, ctx.currentTime, 0.01);
-      } else {
-        _melodyGain.gain.setTargetAtTime(0.001, ctx.currentTime, 0.005);
-      }
-      noteIdx++;
-      if (noteIdx < notes.length) {
-        const nextMs = Math.max(30, durations[noteIdx] * beat * 1000);
-        _melodyTimer = setTimeout(_tick, nextMs);
-      } else {
-        // Fade out at end
-        if (_melodyGain) _melodyGain.gain.setTargetAtTime(0.001, ctx.currentTime, 0.05);
-        _melodyTimer = setTimeout(() => _stopMelody(), 200);
-      }
+    let totalSamples = 0;
+    const segments = [];
+    for (let i = 0; i < notes.length; i++) {
+      const durSec = durations[i] * beat;
+      const ns = Math.max(1, Math.round(durSec * sampleRate));
+      totalSamples += ns;
+      segments.push({ note: notes[i], samples: ns, durSec });
     }
-    _melodyTimer = setTimeout(_tick, tickMs);
+    const buf = audioCtx.createBuffer(1, totalSamples, sampleRate);
+    const data = buf.getChannelData(0);
+    let offset = 0;
+    for (const seg of segments) {
+      const freq = _noteToFreq(seg.note);
+      for (let s = 0; s < seg.samples; s++) {
+        const t = s / sampleRate;
+        if (freq) {
+          // Square wave: sign of sin
+          data[offset + s] = Math.sin(2 * Math.PI * freq * t) >= 0 ? 0.4 : -0.4;
+          // Apply fade-in/fade-out envelope (10% each end)
+          const envPos = s / seg.samples;
+          let env = 1;
+          if (envPos < 0.05) env = envPos / 0.05;
+          else if (envPos > 0.85) env = (1 - envPos) / 0.15;
+          data[offset + s] *= env;
+        } else {
+          data[offset + s] = 0; // rest
+        }
+      }
+      offset += seg.samples;
+    }
+    return buf;
   }
 
-  function _stopMelody() {
-    if (_melodyTimer) { clearTimeout(_melodyTimer); _melodyTimer = null; }
-    if (_melodyOsc) {
-      try {
-        if (_melodyGain) _melodyGain.gain.setTargetAtTime(0.001, audioCtx.currentTime, 0.02);
-        setTimeout(() => {
-          try { _melodyOsc.stop(); } catch(e) {}
-          _melodyOsc = null; _melodyGain = null;
-        }, 100);
-      } catch(e) { _melodyOsc = null; _melodyGain = null; }
-    }
+  function _playBuffer(buf) {
+    if (!buf || !audioCtx) return;
+    try {
+      if (_sourceNode) { try { _sourceNode.stop(); } catch(e) {} }
+      _sourceNode = audioCtx.createBufferSource();
+      _sourceNode.buffer = buf;
+      const gain = audioCtx.createGain();
+      gain.gain.value = 0.25;
+      _sourceNode.connect(gain);
+      gain.connect(audioCtx.destination);
+      _sourceNode.start();
+    } catch(e) {}
   }
 
-  /* ── Jump sound (short chirp — single note, fast) ── */
-  function _playChirp(note, dur, vol) {
+  function _stopSource() {
+    if (_sourceNode) { try { _sourceNode.stop(); } catch(e) {} _sourceNode = null; }
+  }
+
+  /* ── Quick one-shot notes (for coins, chirps) ── */
+  function _playChirp(note, durSec, vol) {
     const ctx = _getAudioCtx();
     const freq = _noteToFreq(note);
     if (!freq) return;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = 'square';
-    osc.frequency.value = freq;
-    gain.gain.setValueAtTime(vol || 0.06, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dur);
-    osc.connect(gain); gain.connect(ctx.destination);
-    osc.start(ctx.currentTime);
-    osc.stop(ctx.currentTime + dur);
+    const sr = ctx.sampleRate;
+    const ns = Math.max(1, Math.round(durSec * sr));
+    const buf = ctx.createBuffer(1, ns, sr);
+    const d = buf.getChannelData(0);
+    for (let s = 0; s < ns; s++) {
+      const t = s / sr;
+      const env = s < ns*0.02 ? s/(ns*0.02) : (s > ns*0.85 ? (ns-s)/(ns*0.15) : 1);
+      d[s] = (Math.sin(2*Math.PI*freq*t) >= 0 ? 0.35 : -0.35) * env * (vol||0.8);
+    }
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    const g = ctx.createGain(); g.gain.value = 0.2;
+    src.connect(g); g.connect(ctx.destination);
+    src.start();
   }
 
   /* ── Mario Main Theme ── */
@@ -137,61 +125,53 @@ const PLATFORMER = (() => {
       0.25,0.25,0.25,0.5,0.125,0.25,0.25,0.5,0.125,0.125,0.5,0.125,0.125,
       0.125,0.125,0.5,0.125,0.125,0.25,0.25,0.25,0.125,0.5,0.125,0.125,0.125
     ];
-    _playMelodySimple(notes, durs, 150, 0.08);
-    // Schedule loop
-    const totalMs = durs.reduce((s,d,i) => s + (d * (60/150) * 1000), 0);
-    audioThemeTimer = setTimeout(() => { playMainTheme(); }, totalMs + 60);
+    const buf = _buildMelodyBuffer(notes, durs, 150);
+    _playBuffer(buf);
+    const totalMs = durs.reduce((s,d) => s + (d * (60/150) * 1000), 0);
+    audioThemeTimer = setTimeout(() => { playMainTheme(); }, totalMs + 80);
   }
 
   function stopTheme() {
     if (audioThemeTimer) { clearTimeout(audioThemeTimer); audioThemeTimer = null; }
-    _stopMelody();
+    _stopSource();
   }
 
   /* ── Power-up Sound ── */
   function playPowerup() {
-    _playMelodySimple(['E4','F4','G4','C5'], [0.1,0.1,0.1,0.15], 240, 0.08);
+    const buf = _buildMelodyBuffer(['E4','F4','G4','C5'], [0.1,0.1,0.1,0.15], 240);
+    _playBuffer(buf);
   }
 
   /* ── Starman Theme ── */
   let starmanTimer = null;
   function playStarman() {
     stopStarman();
-    const notes = [];
-    const durs = [];
+    const notes = []; const durs = [];
     const pattern = ['C4','C4','C4','E4','F4','F4','F4','G4'];
     const durPat = [0.25,0.25,0.25,0.5,0.25,0.25,0.25,0.5];
-    for (let r = 0; r < 4; r++) {
-      for (let i = 0; i < pattern.length; i++) {
-        notes.push(pattern[i]);
-        durs.push(durPat[i]);
-      }
-    }
-    _playMelodySimple(notes, durs, 200, 0.08);
-    starmanTimer = setTimeout(() => {
-      if (P && P.starTimer > 0) playStarman();
-    }, 3500);
+    for (let r = 0; r < 4; r++) { for (let i = 0; i < 8; i++) { notes.push(pattern[i]); durs.push(durPat[i]); } }
+    const buf = _buildMelodyBuffer(notes, durs, 200);
+    _playBuffer(buf);
+    starmanTimer = setTimeout(() => { if (P && P.starTimer > 0) playStarman(); }, 4000);
   }
-
-  function stopStarman() {
-    if (starmanTimer) { clearTimeout(starmanTimer); starmanTimer = null; }
-  }
+  function stopStarman() { if (starmanTimer) { clearTimeout(starmanTimer); starmanTimer = null; } }
 
   /* ── Coin Sound ── */
   function playCoin() {
-    const t = audioCtx ? audioCtx.currentTime : 0;
-    _playChirp('E5', 0.05, 0.08);
-    setTimeout(() => _playChirp('C4', 0.1, 0.08), 60);
+    _playChirp('E5', 0.05);
+    setTimeout(() => _playChirp('C4', 0.1), 60);
   }
 
   /* ── Death Sound ── */
   function playDeath() {
-    _playMelodySimple(['C4','C4','G3','E3'], [0.15,0.15,0.25,0.4], 180, 0.10);
+    const buf = _buildMelodyBuffer(['C4','C4','G3','E3'], [0.15,0.15,0.25,0.4], 180);
+    _playBuffer(buf);
   }
 
-  /* ── Flagpole / Level Complete ── */
+  /* ── Flagpole ── */
   function playFlagpole() {
-    _playMelodySimple(['C4','E4','G4','C5','E5','C6'], [0.12,0.12,0.12,0.12,0.12,0.3], 200, 0.09);
+    const buf = _buildMelodyBuffer(['C4','E4','G4','C5','E5','C6'], [0.12,0.12,0.12,0.12,0.12,0.3], 200);
+    _playBuffer(buf);
   }
 
   let _muted = false;
