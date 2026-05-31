@@ -20,6 +20,13 @@ const PLATFORMER = (() => {
   let particles = [];
   let screenShake = 0;
   let currentCoins = [], currentEnemies = [], powerUps = [];
+  let fireballs = [];
+  let hammers = [];   // for hammer bros
+  let pipes = [];     // for piranha plants (and warp pipes)
+  let currentBoss = null;
+  let qblocks = [];   // ? blocks (question mark boxes)
+  let warpPipes = []; // pipes with warp/enter behavior
+  let bossFireballs = [];
   let levelData;
   let camX = 0, camY = 0;
 
@@ -28,12 +35,26 @@ const PLATFORMER = (() => {
     x:0, y:0, vx:0, vy:0, w:24, h:30,
     onGround:false, facingRight:true,
     dead:false, deathTimer:0,
-    big:false,    // power-up state
+    big:false,    // power-up size state
+    hasFire:false, // fire flower power
+    starTimer:0,   // star invincibility timer
     animFrame:0, animTick:0,
   };
 
+  /* ── Pipe/Warp State ── */
+  let enteringPipe = false;
+  let pipeTimer = 0;
+  let pipeExitX = 0, pipeExitY = 0;
+  let warpTransition = false;
+  let warpTimer = 0;
+  let warpTargetLevel = -1;
+  let warpTargetPipe = 0;
+
+  /* ── ? Block Coin Animations ── */
+  let qblockAnims = []; // { x, y, vy, life } flying coins / items
+
   /* ── Keys ── */
-  const K = { left:false, right:false, jump:false, jumpPressed:false };
+  const K = { left:false, right:false, jump:false, jumpPressed:false, down:false, up:false };
 
   /* ─────────────────────────────────────────
      LEVELS
@@ -74,21 +95,32 @@ const PLATFORMER = (() => {
         {x:110,y:4},{x:111,y:4},{x:112,y:4},
       ],
       powerUps:[
-        {x:20*T, type:'bread'},
+        {x:20*T, type:'mushroom'},
         {x:55*T, type:'tea'},
-        {x:90*T, type:'bread'},
+        {x:90*T, type:'flower'},
       ],
       enemies:[
         {x:10*T,spd:1.3,type:'cat'},
         {x:22*T,spd:1.4,type:'cat'},
-        {x:35*T,spd:1.6,type:'dog'},
+        {x:35*T,spd:1.6,type:'hammer'},    // hammer bro
         {x:45*T,spd:1.6,type:'cat'},
-        {x:58*T,spd:1.9,type:'dog'},
+        {x:58*T,spd:1.9,type:'shoomp'},    // shoomp
+        {x:62*T,spd:0,type:'piranha'},     // piranha plant in pipe
         {x:72*T,spd:2.0,type:'cat'},
-        {x:88*T,spd:2.1,type:'dog'},
+        {x:85*T,spd:1.8,type:'spiny'},     // spiny
         {x:98*T,spd:2.3,type:'cat'},
-        {x:108*T,spd:2.3,type:'dog'},
+        {x:108*T,spd:2.3,type:'lakitu'},   // lakitu
       ],
+      pipes: [
+        {x:62*T, w:T*2},
+      ],
+      qblocks: [
+        {x:10*T, y:9*T, type:'coin', hit:false},
+        {x:30*T, y:8*T, type:'mushroom', hit:false},
+        {x:80*T, y:7*T, type:'flower', hit:false},
+      ],
+      warpPipes: [{ x:15*T, y:0, w:T*1.5, targetLevel:1, targetPipe:0 }],
+      boss:{x:114, y:-1, hp:3, type:'dragon'},
       goal:116,
     },
     {
@@ -118,18 +150,29 @@ const PLATFORMER = (() => {
         {x:109,y:6},{x:116,y:4},{x:122,y:6},{x:123,y:6},
       ],
       powerUps:[
-        {x:30*T,type:'tea'},
-        {x:65*T,type:'bread'},
-        {x:100*T,type:'tea'},
+        {x:30*T, type:'flower'},
+        {x:65*T, type:'mushroom'},
+        {x:100*T, type:'star'},
       ],
       enemies:[
         {x:8*T,spd:1.6,type:'dog'},{x:16*T,spd:1.7,type:'cat'},
-        {x:25*T,spd:1.9,type:'crow'},{x:34*T,spd:1.9,type:'dog'},
-        {x:43*T,spd:2.1,type:'cat'},{x:52*T,spd:2.2,type:'crow'},
-        {x:65*T,spd:2.3,type:'dog'},{x:73*T,spd:2.4,type:'cat'},
-        {x:85*T,spd:2.6,type:'crow'},{x:95*T,spd:2.6,type:'dog'},
-        {x:105*T,spd:2.9,type:'cat'},{x:115*T,spd:3.0,type:'crow'},
+        {x:25*T,spd:1.9,type:'crow'},{x:34*T,spd:1.9,type:'hammer'},
+        {x:38*T,spd:0,type:'piranha'},{x:43*T,spd:2.1,type:'spiny'},{x:52*T,spd:2.2,type:'crow'},
+        {x:60*T,spd:2.3,type:'dog'},{x:73*T,spd:2.4,type:'shoomp'},
+        {x:82*T,spd:2.6,type:'lakitu'},{x:88*T,spd:0,type:'piranha'},{x:95*T,spd:2.6,type:'spiny'},
+        {x:105*T,spd:2.9,type:'hammer'},{x:115*T,spd:3.0,type:'shoomp'},
       ],
+      pipes: [
+        {x:38*T, w:T*2},
+        {x:88*T, w:T*2},
+      ],
+      qblocks: [
+        {x:28*T, y:5*T, type:'star', hit:false},
+        {x:55*T, y:9*T, type:'coin', hit:false},
+        {x:116*T, y:5*T, type:'mushroom', hit:false},
+      ],
+      warpPipes: [{ x:20*T, y:0, w:T*1.5, targetLevel:2, targetPipe:0 }],
+      boss:{x:124, y:-1, hp:5, type:'dragon'},
       goal:127,
     },
     {
@@ -164,20 +207,32 @@ const PLATFORMER = (() => {
         {x:130,y:6},{x:131,y:6},{x:135,y:8},{x:136,y:8},
       ],
       powerUps:[
-        {x:40*T,type:'bread'},
-        {x:80*T,type:'tea'},
-        {x:120*T,type:'bread'},
+        {x:40*T,type:'star'},
+        {x:80*T,type:'flower'},
+        {x:120*T,type:'mushroom'},
       ],
       enemies:[
-        {x:6*T,spd:2.1,type:'crow'},{x:14*T,spd:2.3,type:'dog'},
-        {x:23*T,spd:2.4,type:'cat'},{x:31*T,spd:2.6,type:'crow'},
-        {x:40*T,spd:2.7,type:'dog'},{x:48*T,spd:2.8,type:'cat'},
-        {x:56*T,spd:3.0,type:'crow'},{x:65*T,spd:3.1,type:'dog'},
-        {x:73*T,spd:3.2,type:'cat'},{x:82*T,spd:3.4,type:'crow'},
-        {x:90*T,spd:3.5,type:'dog'},{x:98*T,spd:3.6,type:'cat'},
-        {x:107*T,spd:3.8,type:'crow'},{x:116*T,spd:3.9,type:'dog'},
-        {x:125*T,spd:4.0,type:'cat'},{x:133*T,spd:4.0,type:'crow'},
+        {x:6*T,spd:2.1,type:'crow'},{x:14*T,spd:2.3,type:'hammer'},
+        {x:20*T,spd:0,type:'piranha'},{x:23*T,spd:2.4,type:'spiny'},{x:31*T,spd:2.6,type:'crow'},
+        {x:40*T,spd:2.7,type:'lakitu'},{x:48*T,spd:2.8,type:'shoomp'},
+        {x:56*T,spd:3.0,type:'crow'},{x:65*T,spd:3.1,type:'hammer'},
+        {x:73*T,spd:3.2,type:'spiny'},{x:76*T,spd:0,type:'piranha'},{x:82*T,spd:3.4,type:'crow'},
+        {x:90*T,spd:3.5,type:'lakitu'},{x:98*T,spd:3.6,type:'shoomp'},
+        {x:107*T,spd:3.8,type:'crow'},{x:116*T,spd:3.9,type:'hammer'},
+        {x:125*T,spd:4.0,type:'spiny'},{x:128*T,spd:0,type:'piranha'},{x:133*T,spd:4.0,type:'shoomp'},
       ],
+      pipes: [
+        {x:20*T, w:T*2},
+        {x:76*T, w:T*2},
+        {x:128*T, w:T*2},
+      ],
+      qblocks: [
+        {x:37*T, y:5*T, type:'coin', hit:false},
+        {x:75*T, y:5*T, type:'star', hit:false},
+        {x:113*T, y:5*T, type:'flower', hit:false},
+      ],
+      warpPipes: [{ x:8*T, y:0, w:T*1.5, targetLevel:0, targetPipe:0 }],
+      boss:{x:134, y:-1, hp:7, type:'dragon'},
       goal:137,
     },
   ];
@@ -268,12 +323,16 @@ const PLATFORMER = (() => {
         K.jump = true;
         _tryJump();
       }
+      if (['ArrowDown','s','S'].includes(e.key)) K.down = true;
+      if (['ArrowUp','w','W'].includes(e.key) && !K.jump) { K.up = true; }
       if (e.key === 'Escape') _togglePause();
     });
     document.addEventListener('keyup', e => {
       if (['ArrowLeft','a','A'].includes(e.key))  K.left  = false;
       if (['ArrowRight','d','D'].includes(e.key)) K.right = false;
       if ([' ','ArrowUp','w','W'].includes(e.key)) { K.jump = false; K.jumpPressed = false; }
+      if (['ArrowDown','s','S'].includes(e.key)) K.down = false;
+      if (['ArrowUp','w','W'].includes(e.key)) K.up = false;
     });
 
     canvas.addEventListener('click', () => {
@@ -326,14 +385,94 @@ const PLATFORMER = (() => {
       spd:e.spd, type:e.type,
       onGround:false, alive:true,
       stomped:false, stompTimer:0, animTick:0,
+      // hammer bro: throw cooldown
+      throwTimer: 0,
+      // lakitu: spawn offset, spiny count
+      spawnY: groundY - 80,
+      spinyCount: 0,
+      // piranha plant: pipe index, state timer, hidden state
+      pipeIdx: -1,
+      stateTimer: 0,
+      hidden: true,
     }));
     powerUps = levelData.powerUps.map(p => ({ x:p.x, y:groundY - T*3, type:p.type, collected:false, bobOff:Math.random()*Math.PI*2 }));
+
+    // Reset global arrays
+    hammers = [];
+    pipes = [];
+
+    // Assign pipes from level data
+    if (levelData.pipes) {
+      pipes = levelData.pipes.map(p => ({ ...p }));
+    }
+
+    // Assign piranha plants to pipes
+    let pipeIdx = 0;
+    for (const e of currentEnemies) {
+      if (e.type === 'piranha' && pipeIdx < pipes.length) {
+        e.pipeIdx = pipeIdx;
+        e.hidden = true;
+        e.stateTimer = 0;
+        e.x = pipes[pipeIdx].x + pipes[pipeIdx].w/2 - 14;
+        e.y = groundY - T; // start hidden in pipe
+        pipeIdx++;
+      }
+    }
+
+    // ── ? Blocks ──
+    qblocks = [];
+    if (levelData.qblocks) {
+      qblocks = levelData.qblocks.map(qb => ({
+        x: qb.x,
+        y: qb.y,
+        type: qb.type,
+        hit: qb.hit || false,
+      }));
+    }
+
+    // ── Warp Pipes ──
+    warpPipes = [];
+    enteringPipe = false;
+    pipeTimer = 0;
+    warpTransition = false;
+    warpTimer = 0;
+    warpTargetLevel = -1;
+    warpTargetPipe = 0;
+    qblockAnims = [];
 
     P.x=52; P.y=groundY-P.h-T; P.vx=0; P.vy=0;
     P.onGround=false; P.facingRight=true;
     P.dead=false; P.deathTimer=0; P.animFrame=0; P.animTick=0;
-    P.big = false;
+    P.big = false; P.hasFire = false; P.starTimer = 0;
     camX=0; camY=0; invincible=0; frameCount=0; screenShake=0;
+    fireballs = [];
+    bossFireballs = [];
+
+    // ── Boss ──
+    if (levelData.boss) {
+      const bd = levelData.boss;
+      currentBoss = {
+        x: bd.x * T,
+        y: groundY - 50,
+        vx: 0,
+        vy: 0,
+        w: 60,
+        h: 50,
+        dir: -1,
+        spd: 1.2,
+        hp: bd.hp,
+        maxHp: bd.hp,
+        alive: true,
+        dead: false,
+        deathTimer: 0,
+        animTick: 0,
+        fireTimer: 0,
+        walkTimer: 0,
+      };
+    } else {
+      currentBoss = null;
+    }
+
     state='playing';
     if (raf) cancelAnimationFrame(raf);
     _loop();
@@ -342,12 +481,34 @@ const PLATFORMER = (() => {
   function _tryJump() {
     if (state==='start'||state==='gameover'||state==='win') { _startGame(); return; }
     if (state!=='playing') return;
-    if (P.onGround && !P.dead) {
+    if (P.dead) return;
+    // Shoot fireball if player has fire power
+    if (P.hasFire && !P.onGround) {
+      _shootFireball();
+      return;
+    }
+    if (P.onGround) {
       P.vy = P.big ? JUMP_V * 1.05 : JUMP_V;
       P.onGround = false;
       AUDIO.playTick();
       _spawnParticles(P.x + P.w/2, P.y + P.h, '#aaddff', 6, 'dust');
     }
+  }
+
+  function _shootFireball() {
+    if (fireballs.length >= 3) return; // max 3 fireballs at once
+    const dir = P.facingRight ? 1 : -1;
+    fireballs.push({
+      x: P.x + (dir > 0 ? P.w : -8),
+      y: P.y + 6,
+      vx: dir * 6,
+      vy: -2.5,
+      w: 8,
+      h: 8,
+      life: 80,
+      bounce: 0,
+    });
+    AUDIO.playTick();
   }
 
   /* ─────────────────────────────────────────
@@ -365,6 +526,7 @@ const PLATFORMER = (() => {
   function _update() {
     frameCount++;
     if (invincible > 0) invincible--;
+    if (P.starTimer > 0) P.starTimer--;
     if (screenShake > 0) screenShake -= 0.6;
     const H = canvas.height;
     const groundY = H - T;
@@ -457,21 +619,168 @@ const PLATFORMER = (() => {
         e.vy = 0;
       }
 
+      // ── Hammer Bro ──
+      if (e.type==='hammer') {
+        // Don't move horizontally
+        e.x += e.dir * e.spd * 0.15;
+        e.throwTimer++;
+        if (e.throwTimer >= 40) {
+          e.throwTimer = 0;
+          // Throw toward player
+          const dx = P.x - e.x;
+          const hVx = dx > 0 ? 4 : -4;
+          hammers.push({
+            x: e.x + e.w/2 - 4,
+            y: e.y - 4,
+            vx: hVx + (Math.random()-0.5)*1.5,
+            vy: -6 - Math.random()*2,
+            w: 10,
+            h: 10,
+            active: true,
+            life: 60,
+          });
+        }
+      }
+
+      // ── Lakitu ──
+      if (e.type==='lakitu') {
+        // Float above player
+        const targetX = Math.max(20, Math.min(P.x - e.w/2, levelData.width*T - e.w - 20));
+        e.x += (targetX - e.x) * 0.06;
+        e.y = e.spawnY + Math.sin(frameCount*0.04) * 10;
+        e.vy = 0;
+        e.onGround = false;
+        e.throwTimer++;
+        if (e.throwTimer >= 50 && e.alive) {
+          e.throwTimer = 0;
+          // Spawn a spiny below Lakitu
+          const newSpiny = {
+            x: e.x + e.w/2 - 12,
+            y: e.y + 20,
+            vx: 0,
+            vy: 4,
+            w: 24,
+            h: 22,
+            dir: P.x > e.x ? 1 : -1,
+            spd: 1.2,
+            type: 'spiny',
+            onGround: false,
+            alive: true,
+            stomped: false,
+            stompTimer: 0,
+            animTick: 0,
+            throwTimer: 0,
+            spawnY: 0,
+            spinyCount: 0,
+            pipeIdx: -1,
+            stateTimer: 0,
+            hidden: false,
+          };
+          currentEnemies.push(newSpiny);
+        }
+      }
+
+      // ── Spiny ──
+      if (e.type==='spiny') {
+        // Normal walking behavior (same as cat/dog) but can't be stomped
+        // Edge turning is handled by the generic code above
+      }
+
+      // ── Piranha Plant ──
+      if (e.type==='piranha') {
+        // Piranha stays in pipe, cycles rise/fall
+        if (e.pipeIdx >= 0 && e.pipeIdx < pipes.length) {
+          const pipe = pipes[e.pipeIdx];
+          const pipeTop = groundY - T;
+          const fullyUpY = pipeTop - 36;
+          const fullyDownY = pipeTop + 2;
+
+          // Check if player is close (within 3 tiles)
+          const playerClose = Math.abs(P.x - (pipe.x + pipe.w/2)) < T * 3;
+
+          e.stateTimer++;
+
+          if (playerClose) {
+            // Stay hidden when player is close
+            e.hidden = true;
+            e.y += (fullyDownY - e.y) * 0.15;
+            e.stateTimer = 0;
+          } else if (e.hidden) {
+            // Hidden: wait then rise
+            if (e.stateTimer > 60) {
+              e.hidden = false;
+              e.stateTimer = 0;
+            }
+            e.y += (fullyDownY - e.y) * 0.1;
+          } else {
+            // Visible cycle: up 20 frames, stay 40 frames, down 20 frames
+            if (e.stateTimer < 20) {
+              // Rising
+              e.y += (fullyUpY - e.y) * 0.2;
+            } else if (e.stateTimer < 60) {
+              // Stay up
+              e.y = fullyUpY;
+            } else if (e.stateTimer < 80) {
+              // Going down
+              e.y += (fullyDownY - e.y) * 0.15;
+            } else {
+              // Back down
+              e.hidden = true;
+              e.stateTimer = 0;
+              e.y = fullyDownY;
+            }
+          }
+          e.vy = 0;
+        }
+      }
+
+      // ── Shoomp ──
+      if (e.type==='shoomp') {
+        // Float in a circular pattern
+        const baseY = groundY - e.h - 20 - (e.x % 60);
+        e.x += e.dir * e.spd * 0.8;
+        e.y = baseY + Math.sin(frameCount*0.05 + e.x*0.02) * 14;
+        e.vy = 0;
+        e.onGround = false;
+      }
+
       // Player hit
-      if (!P.dead && invincible===0 && _overlap(P,e)) {
-        if (P.vy>0.5 && P.y+P.h < e.y+e.h*0.5) {
+      if (!P.dead && _overlap(P,e)) {
+        const isStarActive = P.starTimer > 0;
+        if (isStarActive) {
+          // Star power kills enemies on touch
+          e.stomped=true; e.stompTimer=0;
+          screenShake = 4;
+          AUDIO.playWin();
+          _spawnParticles(e.x+e.w/2, e.y, '#FFD700', 10, 'star');
+          score += 150;
+        } else if (P.vy>0.5 && P.y+P.h < e.y+e.h*0.5 && e.type!=='spiny' && e.type!=='lakitu') {
           e.stomped=true; e.stompTimer=0;
           P.vy = -9;
           score += 150;
           screenShake = 4;
           AUDIO.playWin();
           _spawnParticles(e.x+e.w/2, e.y, '#FFD700', 10, 'star');
-        } else {
-          invincible = 110;
-          screenShake = 8;
-          lives--;
-          AUDIO.playTick();
-          if (lives<=0) { _playerDie(); }
+        } else if (invincible===0) {
+          // Player takes damage
+          if (P.hasFire) {
+            // Lose fire but stay big
+            P.hasFire = false;
+            invincible = 110;
+            screenShake = 8;
+            AUDIO.playTick();
+          } else if (P.big) {
+            P.big = false;
+            invincible = 110;
+            screenShake = 8;
+            AUDIO.playTick();
+          } else {
+            invincible = 110;
+            screenShake = 8;
+            lives--;
+            AUDIO.playTick();
+            if (lives<=0) { _playerDie(); }
+          }
         }
       }
     }
@@ -491,10 +800,271 @@ const PLATFORMER = (() => {
       if (pu.collected) continue;
       if (_overlap(P, {x:pu.x,y:pu.y,w:T*0.8,h:T*0.8})) {
         pu.collected=true;
-        if (pu.type==='bread') { P.big=true; score+=200; }
+        if (pu.type==='bread' || pu.type==='mushroom') { P.big=true; score+=200; }
         else if (pu.type==='tea') { lives=Math.min(lives+1,5); score+=300; }
+        else if (pu.type==='flower') { P.big=true; P.hasFire=true; score+=250; }
+        else if (pu.type==='star') { P.starTimer=600; invincible=600; score+=500; }
         AUDIO.playWin();
-        _spawnParticles(pu.x+T*0.4, pu.y, pu.type==='bread'?'#D4A017':'#5DADE2', 12, 'star');
+        _spawnParticles(pu.x+T*0.4, pu.y, pu.type==='bread'||pu.type==='mushroom'?'#D4A017':pu.type==='tea'?'#5DADE2':pu.type==='flower'?'#FF6B35':pu.type==='star'?'#FFD700':'#D4A017', 12, 'star');
+      }
+    }
+
+    // ── Fireballs ──
+    for (let i=fireballs.length-1; i>=0; i--) {
+      const fb = fireballs[i];
+      fb.life--;
+      if (fb.life <= 0 || fb.x < -20 || fb.x > levelData.width*T + 20) {
+        fireballs.splice(i,1);
+        continue;
+      }
+      // Gravity & bounce
+      fb.vy += 0.3;
+      fb.x += fb.vx;
+      fb.y += fb.vy;
+      // Ground collision
+      if (fb.y + fb.h >= groundY) {
+        fb.y = groundY - fb.h;
+        fb.vy = -3.5;
+        fb.bounce++;
+        if (fb.bounce > 3) { fireballs.splice(i,1); continue; }
+      }
+      // Platform collision
+      for (const p of levelData.platforms) {
+        const px=p.x*T, py=p.y*T, pw=p.w*T;
+        if (fb.x+fb.w>px && fb.x<px+pw && fb.y+fb.h>py && fb.y<py+T) {
+          // Hit from top
+          if (fb.vy>0 && fb.y+fb.h<py+T*0.6) {
+            fb.y = py - fb.h;
+            fb.vy = -3.5;
+            fb.bounce++;
+          } else {
+            fireballs.splice(i,1);
+            break;
+          }
+        }
+      }
+      if (i >= fireballs.length) continue;
+      // Hit enemies
+      for (const e of currentEnemies) {
+        if (!e.alive) continue;
+        if (_overlap(fb, e)) {
+          e.stomped=true; e.stompTimer=0;
+          screenShake = 3;
+          score += 150;
+          AUDIO.playWin();
+          _spawnParticles(e.x+e.w/2, e.y, '#FF6B35', 8, 'star');
+          fireballs.splice(i,1);
+          break;
+        }
+      }
+    }
+
+    // ── Hammers (Hammer Bro projectiles) ──
+    for (let i=hammers.length-1; i>=0; i--) {
+      const h = hammers[i];
+      h.life--;
+      if (h.life <= 0 || h.x < -30 || h.x > levelData.width*T + 30) {
+        hammers.splice(i,1);
+        continue;
+      }
+      h.vy += 0.35;  // gravity on hammer arc
+      h.x += h.vx;
+      h.y += h.vy;
+      // Ground collision
+      if (h.y + h.h >= groundY) {
+        hammers.splice(i,1);
+        continue;
+      }
+      // Platform collision
+      for (const p of levelData.platforms) {
+        const px=p.x*T, py=p.y*T, pw=p.w*T;
+        if (h.x+h.w>px && h.x<px+pw && h.y+h.h>py && h.y<py+T) {
+          hammers.splice(i,1);
+          break;
+        }
+      }
+      if (i >= hammers.length) continue;
+      // Hit player
+      if (!P.dead && invincible===0 && _overlap(P, {x:h.x,y:h.y,w:h.w,h:h.h})) {
+        if (P.starTimer > 0) {
+          // Star: destroy hammer
+          hammers.splice(i,1);
+          score += 10;
+          continue;
+        }
+        if (P.hasFire) { P.hasFire = false; invincible = 110; screenShake = 8; AUDIO.playTick(); }
+        else if (P.big) { P.big = false; invincible = 110; screenShake = 8; AUDIO.playTick(); }
+        else { invincible = 110; screenShake = 8; lives--; AUDIO.playTick(); if (lives<=0) _playerDie(); }
+        hammers.splice(i,1);
+      }
+    }
+
+    // ── Boss Update ──
+    if (currentBoss && currentBoss.alive) {
+      const b = currentBoss;
+      b.animTick++;
+
+      // Walking left/right
+      b.walkTimer++;
+      if (b.walkTimer > 120) {
+        b.dir *= -1;
+        b.walkTimer = 0;
+      }
+      b.x += b.dir * b.spd;
+
+      // Keep within level bounds
+      if (b.x < 20) { b.x = 20; b.dir = 1; b.walkTimer = 0; }
+      if (b.x + b.w > levelData.width * T - 20) { b.x = levelData.width * T - b.w - 20; b.dir = -1; b.walkTimer = 0; }
+
+      // Stay on ground
+      b.y = groundY - b.h;
+
+      // Throw boss fireballs every 60 frames
+      b.fireTimer++;
+      if (b.fireTimer >= 60) {
+        b.fireTimer = 0;
+        const dx = P.x - b.x;
+        bossFireballs.push({
+          x: b.x + (dx > 0 ? b.w : -8),
+          y: b.y + 12,
+          vx: (dx > 0 ? 3.5 : -3.5) + (Math.random() - 0.5) * 0.8,
+          vy: -3 + Math.random() * -0.5,
+          w: 12,
+          h: 12,
+          life: 120,
+          bounce: 0,
+        });
+      }
+
+      // Boss collision with player
+      if (!P.dead && _overlap(P, b)) {
+        const isStarActive = P.starTimer > 0;
+        if (isStarActive) {
+          // Star power damages boss
+          b.hp--;
+          screenShake = 6;
+          AUDIO.playWin();
+          _spawnParticles(b.x + b.w / 2, b.y, '#FFD700', 12, 'star');
+          score += 200;
+          if (b.hp <= 0) {
+            b.alive = false;
+            b.dead = true;
+            b.deathTimer = 0;
+            screenShake = 14;
+            AUDIO.playWin();
+            _spawnParticles(b.x + b.w / 2, b.y + b.h / 2, '#FF6B35', 30, 'star');
+          }
+        } else if (P.vy > 0.5 && P.y + P.h < b.y + b.h * 0.35) {
+          // Player stomps boss head
+          b.hp--;
+          P.vy = -10;
+          screenShake = 8;
+          AUDIO.playWin();
+          _spawnParticles(b.x + b.w / 2, b.y, '#FFD700', 15, 'star');
+          score += 300;
+          if (b.hp <= 0) {
+            b.alive = false;
+            b.dead = true;
+            b.deathTimer = 0;
+            screenShake = 14;
+            _spawnParticles(b.x + b.w / 2, b.y + b.h / 2, '#FF6B35', 30, 'star');
+            _spawnParticles(b.x + b.w / 2, b.y + b.h / 2, '#FFD700', 20, 'star');
+          }
+        } else if (invincible === 0) {
+          if (P.hasFire) { P.hasFire = false; invincible = 110; screenShake = 8; AUDIO.playTick(); }
+          else if (P.big) { P.big = false; invincible = 110; screenShake = 8; AUDIO.playTick(); }
+          else { invincible = 110; screenShake = 8; lives--; AUDIO.playTick(); if (lives <= 0) _playerDie(); }
+        }
+      }
+    }
+
+    // ── Boss death animation ──
+    if (currentBoss && currentBoss.dead) {
+      currentBoss.deathTimer++;
+      if (currentBoss.deathTimer % 5 === 0) {
+        _spawnParticles(
+          currentBoss.x + Math.random() * currentBoss.w,
+          currentBoss.y + Math.random() * currentBoss.h,
+          ['#FF4500', '#FFD700', '#FF6B35', '#00FF00', '#FF0000'][Math.floor(Math.random() * 5)],
+          3,
+          'star'
+        );
+      }
+      if (currentBoss.deathTimer === 120) {
+        // Boss fully dead — allow level complete
+        currentBoss.dead = false;
+        currentBoss = { ...currentBoss, alive: false, hp: 0 };
+      }
+    }
+
+    // ── Boss Fireballs Update ──
+    for (let i = bossFireballs.length - 1; i >= 0; i--) {
+      const fb = bossFireballs[i];
+      fb.life--;
+      if (fb.life <= 0 || fb.x < -30 || fb.x > levelData.width * T + 30) {
+        bossFireballs.splice(i, 1);
+        continue;
+      }
+      fb.vy += 0.25;
+      fb.x += fb.vx;
+      fb.y += fb.vy;
+      // Ground collision
+      if (fb.y + fb.h >= groundY) {
+        fb.y = groundY - fb.h;
+        fb.vy = -3;
+        fb.bounce++;
+        if (fb.bounce > 2) { bossFireballs.splice(i, 1); continue; }
+      }
+      // Platform collision
+      for (const p of levelData.platforms) {
+        const px = p.x * T, py = p.y * T, pw = p.w * T;
+        if (fb.x + fb.w > px && fb.x < px + pw && fb.y + fb.h > py && fb.y < py + T) {
+          if (fb.vy > 0 && fb.y + fb.h < py + T * 0.6) {
+            fb.y = py - fb.h;
+            fb.vy = -3;
+            fb.bounce++;
+          } else {
+            bossFireballs.splice(i, 1);
+            break;
+          }
+        }
+      }
+      if (i >= bossFireballs.length) continue;
+      // Hit player
+      if (!P.dead && invincible === 0 && _overlap(P, fb)) {
+        if (P.starTimer > 0) {
+          bossFireballs.splice(i, 1);
+          continue;
+        }
+        if (P.hasFire) { P.hasFire = false; invincible = 110; screenShake = 8; AUDIO.playTick(); }
+        else if (P.big) { P.big = false; invincible = 110; screenShake = 8; AUDIO.playTick(); }
+        else { invincible = 110; screenShake = 8; lives--; AUDIO.playTick(); if (lives <= 0) _playerDie(); }
+        bossFireballs.splice(i, 1);
+      }
+    }
+
+    // ── Fireball hit boss ──
+    if (currentBoss && currentBoss.alive) {
+      for (let i = fireballs.length - 1; i >= 0; i--) {
+        const fb = fireballs[i];
+        if (_overlap(fb, currentBoss)) {
+          currentBoss.hp--;
+          screenShake = 6;
+          AUDIO.playWin();
+          _spawnParticles(currentBoss.x + currentBoss.w / 2, currentBoss.y, '#FF6B35', 10, 'star');
+          score += 200;
+          fireballs.splice(i, 1);
+          if (currentBoss.hp <= 0) {
+            currentBoss.alive = false;
+            currentBoss.dead = true;
+            currentBoss.deathTimer = 0;
+            screenShake = 14;
+            AUDIO.playWin();
+            _spawnParticles(currentBoss.x + currentBoss.w / 2, currentBoss.y + currentBoss.h / 2, '#FF6B35', 30, 'star');
+            _spawnParticles(currentBoss.x + currentBoss.w / 2, currentBoss.y + currentBoss.h / 2, '#FFD700', 20, 'star');
+          }
+          break;
+        }
       }
     }
 
@@ -508,7 +1078,8 @@ const PLATFORMER = (() => {
 
     // ── Goal ──
     const gx = levelData.goal * T;
-    if (!P.dead && P.x+P.w>gx && P.x<gx+T*2.5) {
+    const bossAlive = currentBoss && currentBoss.alive;
+    if (!P.dead && P.x+P.w>gx && P.x<gx+T*2.5 && !bossAlive) {
       score += 500 + coinCount*5;
       state  = 'levelcomplete';
       AUDIO.playWin();
@@ -603,6 +1174,10 @@ const PLATFORMER = (() => {
     for (const pu of powerUps)           { if (!pu.collected) _drawPowerUp(pu); }
     for (const c of currentCoins)        { if (!c.collected)  _drawCoin(c.x, c.y, c.bobOff); }
     _drawGoal(levelData.goal*T, H);
+    // Draw pipes (for piranha plants)
+    if (levelData.pipes) {
+      for (const pipe of levelData.pipes) _drawPipe(pipe.x, H, pipe.w);
+    }
     for (const e of currentEnemies)      { if (e.alive) _drawEnemy(e); }
 
     // Particles
@@ -620,9 +1195,47 @@ const PLATFORMER = (() => {
       ctx.globalAlpha=1;
     }
 
+    // Fireballs
+    for (const fb of fireballs) {
+      ctx.save();
+      const pulse = Math.sin(frameCount*0.3)*2;
+      const gd = ctx.createRadialGradient(fb.x+4, fb.y+4, 0, fb.x+4, fb.y+4, 8+pulse);
+      gd.addColorStop(0, 'rgba(255,255,200,1)');
+      gd.addColorStop(0.3, 'rgba(255,200,50,1)');
+      gd.addColorStop(0.7, 'rgba(255,100,20,0.9)');
+      gd.addColorStop(1, 'rgba(200,40,0,0)');
+      ctx.fillStyle = gd;
+      ctx.beginPath();
+      ctx.arc(fb.x+4, fb.y+4, 8+pulse, 0, Math.PI*2);
+      ctx.fill();
+      // Inner core
+      ctx.fillStyle = '#FFF';
+      ctx.beginPath();
+      ctx.arc(fb.x+4, fb.y+4, 3, 0, Math.PI*2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // Hammers (hammer bro projectiles)
+    for (const h of hammers) {
+      if (!h.active) continue;
+      _drawHammer(h.x, h.y, h.w, h.h);
+    }
+
+    // ── Boss Fireballs ──
+    for (const fb of bossFireballs) {
+      _drawBossFireball(fb, frameCount);
+    }
+
+    // ── Boss ──
+    if (currentBoss && (currentBoss.alive || currentBoss.dead)) {
+      _drawBoss(currentBoss);
+    }
+
     // Player
+    const starActive = P.starTimer > 0;
+    const blink = (invincible>0 && Math.floor(invincible/5)%2===1) || (starActive && Math.floor(frameCount/3)%2===1);
     if (!P.dead || P.deathTimer%8<5) {
-      const blink = invincible>0 && Math.floor(invincible/5)%2===1;
       if (!blink) _drawPlayer();
     }
 
@@ -838,7 +1451,14 @@ const PLATFORMER = (() => {
     const x=pu.x, y=pu.y+bob;
     const s=T*0.72;
     // Glow
-    ctx.fillStyle=pu.type==='bread'?'rgba(212,160,23,0.3)':'rgba(93,173,226,0.3)';
+    let glowColor;
+    if (pu.type==='bread')        glowColor='rgba(212,160,23,0.3)';
+    else if (pu.type==='tea')     glowColor='rgba(93,173,226,0.3)';
+    else if (pu.type==='mushroom') glowColor='rgba(220,60,60,0.3)';
+    else if (pu.type==='flower')  glowColor='rgba(255,107,53,0.3)';
+    else if (pu.type==='star')    glowColor='rgba(255,215,0,0.4)';
+    else                          glowColor='rgba(212,160,23,0.3)';
+    ctx.fillStyle=glowColor;
     ctx.beginPath(); ctx.arc(x+s/2,y+s/2,s*0.8,0,Math.PI*2); ctx.fill();
 
     if (pu.type==='bread') {
@@ -849,6 +1469,62 @@ const PLATFORMER = (() => {
       ctx.beginPath(); ctx.ellipse(x+s/2,y+8,s/2-2,10,0,Math.PI,0); ctx.fill();
       ctx.fillStyle='rgba(255,255,255,0.3)';
       ctx.fillRect(x+6,y+12,4,8);
+    } else if (pu.type==='mushroom') {
+      // Red mushroom 🍄
+      const cx = x+s/2, cy = y+s/2-2;
+      // Stem
+      ctx.fillStyle='#F5E6D0';
+      ctx.beginPath(); ctx.roundRect(cx-5,cy+2,10,s/2-2,3); ctx.fill();
+      // Cap
+      ctx.fillStyle='#E63946';
+      ctx.beginPath(); ctx.ellipse(cx,cy-2,s/2,10,0,Math.PI,0); ctx.fill();
+      // Cap top rounded
+      ctx.beginPath(); ctx.ellipse(cx,cy-2,s/2-1,8,0,0,Math.PI); ctx.fill();
+      // White spots
+      ctx.fillStyle='rgba(255,255,255,0.8)';
+      ctx.beginPath(); ctx.arc(cx-6,cy-5,3,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(cx+5,cy-3,2.5,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(cx-1,cy-8,2,0,Math.PI*2); ctx.fill();
+    } else if (pu.type==='flower') {
+      // Fire flower 🌺
+      const cx = x+s/2, cy = y+s/2;
+      // Stem
+      ctx.fillStyle='#2ECC71';
+      ctx.fillRect(cx-2,cy+2,4,s/2-2);
+      // Leaf
+      ctx.beginPath(); ctx.ellipse(cx-6,cy+s/4,5,3,0.5,0,Math.PI*2); ctx.fill();
+      // Petals
+      const colors = ['#FF6B35','#FF8C42','#FFA94D','#FF6B35','#FF8C42'];
+      for (let i=0; i<5; i++) {
+        const angle = (i/5)*Math.PI*2 - Math.PI/2;
+        ctx.fillStyle = colors[i];
+        ctx.beginPath();
+        ctx.ellipse(cx+Math.cos(angle)*7, cy-4+Math.sin(angle)*7, 5, 4, angle, 0, Math.PI*2);
+        ctx.fill();
+      }
+      // Center
+      ctx.fillStyle='#FFD700';
+      ctx.beginPath(); ctx.arc(cx,cy-4,4,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle='#C8980A';
+      ctx.beginPath(); ctx.arc(cx,cy-4,2,0,Math.PI*2); ctx.fill();
+    } else if (pu.type==='star') {
+      // Star 🌟
+      const cx = x+s/2, cy = y+s/2;
+      const pulse = Math.sin(frameCount*0.1)*3;
+      const r = s/2 + pulse;
+      ctx.fillStyle='#FFD700';
+      ctx.beginPath();
+      for (let i=0; i<5; i++) {
+        const a = (i*2*Math.PI/5) - Math.PI/2;
+        const outer = i===0 ? ctx.moveTo(cx+Math.cos(a)*r, cy+Math.sin(a)*r) : ctx.lineTo(cx+Math.cos(a)*r, cy+Math.sin(a)*r);
+        const innerA = a + Math.PI/5;
+        ctx.lineTo(cx+Math.cos(innerA)*r*0.4, cy+Math.sin(innerA)*r*0.4);
+      }
+      ctx.closePath(); ctx.fill();
+      // Glow ring
+      ctx.strokeStyle='rgba(255,215,0,0.5)';
+      ctx.lineWidth=2;
+      ctx.beginPath(); ctx.arc(cx,cy,r+3,0,Math.PI*2); ctx.stroke();
     } else {
       // Tea glass ☕
       ctx.fillStyle='#5DADE2';
@@ -865,11 +1541,26 @@ const PLATFORMER = (() => {
     ctx.fillStyle='#FFF';
     ctx.font=`bold ${Math.round(s*0.38)}px Cairo,Arial`;
     ctx.textAlign='center'; ctx.textBaseline='middle';
-    ctx.fillText(pu.type==='bread'?'+💪':'+❤️', x+s/2, y+s*1.2);
+    let label;
+    if (pu.type==='bread' || pu.type==='mushroom') label='+💪';
+    else if (pu.type==='tea') label='+❤️';
+    else if (pu.type==='flower') label='🔥';
+    else if (pu.type==='star') label='⭐';
+    else label='+💪';
+    ctx.fillText(label, x+s/2, y+s*1.2);
   }
 
   function _drawGoal(x, H) {
     const base=H-T;
+    const bossAlive = currentBoss && currentBoss.alive;
+    // If boss is alive, only show a faint locked marker
+    if (bossAlive) {
+      ctx.fillStyle='rgba(150,50,50,0.5)';
+      ctx.font=`${Math.round(T*0.7)}px serif`;
+      ctx.textAlign='center';
+      ctx.fillText('🔒', x+T, base-T*3);
+      return;
+    }
     // Pole shadow
     ctx.fillStyle='rgba(0,0,0,0.2)';
     ctx.fillRect(x+T+2,base-T*6,4,T*6);
@@ -900,6 +1591,230 @@ const PLATFORMER = (() => {
     ctx.fillStyle=gg; ctx.beginPath(); ctx.arc(x+T,base-T*3,T*1.5,0,Math.PI*2); ctx.fill();
   }
 
+  /* ── Boss (Dragon/Bowser style) ── */
+  function _drawBoss(b) {
+    const x = b.x, y = b.y, w = b.w, h = b.h, t = b.animTick;
+    const pulse = Math.sin(t * 0.08) * 2;
+
+    ctx.save();
+
+    // Flip based on direction
+    if (b.dir < 0) {
+      ctx.translate(x + w, 0);
+      ctx.scale(-1, 1);
+      ctx.translate(-x, 0);
+    }
+
+    // Tail with spikes
+    ctx.fillStyle = '#2E7D32';
+    ctx.beginPath();
+    ctx.moveTo(x - 12, y + h - 10);
+    ctx.lineTo(x - 22, y + h - 14);
+    ctx.lineTo(x - 10, y + h - 16);
+    ctx.lineTo(x - 20, y + h - 22);
+    ctx.lineTo(x - 8, y + h - 24);
+    ctx.lineTo(x - 14, y + h - 30);
+    ctx.lineTo(x - 2, y + h - 28);
+    ctx.fill();
+    // Tail tip spike
+    ctx.fillStyle = '#FFD700';
+    ctx.beginPath();
+    ctx.moveTo(x - 14, y + h - 30);
+    ctx.lineTo(x - 18, y + h - 38);
+    ctx.lineTo(x - 8, y + h - 34);
+    ctx.fill();
+
+    // Shell (green turtle shell body)
+    const shellGrad = ctx.createLinearGradient(x, y, x + w, y);
+    shellGrad.addColorStop(0, '#388E3C');
+    shellGrad.addColorStop(0.5, '#2E7D32');
+    shellGrad.addColorStop(1, '#1B5E20');
+    ctx.fillStyle = shellGrad;
+    ctx.beginPath();
+    ctx.roundRect(x + 4, y + 12, w - 4, h - 14, 6);
+    ctx.fill();
+
+    // Shell pattern lines
+    ctx.strokeStyle = 'rgba(0,80,0,0.4)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i < 5; i++) {
+      const lx = x + 8 + i * 10;
+      ctx.beginPath();
+      ctx.moveTo(lx, y + 14);
+      ctx.lineTo(lx + 4, y + h - 6);
+      ctx.stroke();
+    }
+
+    // Spikes on shell
+    ctx.fillStyle = '#FFD700';
+    for (let i = 0; i < 4; i++) {
+      const sx = x + 10 + i * 14;
+      ctx.beginPath();
+      ctx.moveTo(sx - 3, y + 12);
+      ctx.lineTo(sx, y + 2);
+      ctx.lineTo(sx + 3, y + 12);
+      ctx.fill();
+    }
+
+    // Belly (lighter green)
+    ctx.fillStyle = '#81C784';
+    ctx.beginPath();
+    ctx.roundRect(x + 10, y + 28, w - 20, h - 20, 4);
+    ctx.fill();
+
+    // Legs
+    ctx.fillStyle = '#2E7D32';
+    // Back leg
+    ctx.fillRect(x + 2, y + h - 8, 10, 8);
+    ctx.fillRect(x + w - 12, y + h - 8, 10, 8);
+    // Front feet with claws
+    ctx.fillStyle = '#FFD700';
+    const legAnim = Math.floor(t / 8) % 2;
+    ctx.fillRect(x + 4 + legAnim * 2, y + h - 2, 6, 2);
+    ctx.fillRect(x + w - 10 + legAnim * 2, y + h - 2, 6, 2);
+
+    // Arms
+    ctx.fillStyle = '#2E7D32';
+    ctx.fillRect(x + 2, y + 28, 6, 14);
+    ctx.fillRect(x + w - 8, y + 28, 6, 14);
+    // Hands/claws
+    ctx.fillStyle = '#FFD700';
+    ctx.fillRect(x + 2, y + 40, 8, 4);
+    ctx.fillRect(x + w - 10, y + 40, 8, 4);
+
+    // Head (golden)
+    const headGrad = ctx.createRadialGradient(x + 24, y + 6, 2, x + 24, y + 6, 16);
+    headGrad.addColorStop(0, '#FFD700');
+    headGrad.addColorStop(0.6, '#FFC107');
+    headGrad.addColorStop(1, '#FFA000');
+    ctx.fillStyle = headGrad;
+    ctx.beginPath();
+    ctx.ellipse(x + 24, y + 10, 16, 14, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Snout
+    ctx.fillStyle = '#FFB300';
+    ctx.beginPath();
+    ctx.ellipse(x + 36, y + 12, 10, 8, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Nostrils
+    ctx.fillStyle = '#5D4037';
+    ctx.fillRect(x + 38, y + 10, 3, 2);
+    ctx.fillRect(x + 42, y + 10, 3, 2);
+
+    // Eyes (red)
+    ctx.fillStyle = '#D32F2F';
+    ctx.beginPath();
+    ctx.arc(x + 20, y + 6, 4 + pulse * 0.3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(x + 32, y + 6, 4 + pulse * 0.3, 0, Math.PI * 2);
+    ctx.fill();
+    // Pupils (yellow glow)
+    ctx.fillStyle = '#FFEB3B';
+    ctx.beginPath();
+    ctx.arc(x + 19, y + 5, 2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(x + 31, y + 5, 2, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Eyebrows (angry)
+    ctx.strokeStyle = '#5D4037';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(x + 16, y + 1);
+    ctx.lineTo(x + 22, y + 3);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x + 36, y + 1);
+    ctx.lineTo(x + 30, y + 3);
+    ctx.stroke();
+
+    // Mouth / Fire breath
+    const mouthOpen = Math.sin(t * 0.1) > 0.3;
+    if (mouthOpen) {
+      // Fire breath glow
+      const fireGrad = ctx.createRadialGradient(x + 44, y + 16, 0, x + 44, y + 16, 18);
+      fireGrad.addColorStop(0, 'rgba(255,255,200,0.9)');
+      fireGrad.addColorStop(0.3, 'rgba(255,150,50,0.8)');
+      fireGrad.addColorStop(0.7, 'rgba(255,50,0,0.5)');
+      fireGrad.addColorStop(1, 'rgba(200,0,0,0)');
+      ctx.fillStyle = fireGrad;
+      ctx.beginPath();
+      ctx.ellipse(x + 46, y + 18, 14 + Math.random() * 4, 8 + Math.random() * 3, 0, 0, Math.PI * 2);
+      ctx.fill();
+      // Inner fire
+      ctx.fillStyle = 'rgba(255,255,255,0.7)';
+      ctx.beginPath();
+      ctx.ellipse(x + 48, y + 17, 5 + Math.random() * 2, 3 + Math.random() * 2, 0, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      // Closed mouth line
+      ctx.strokeStyle = '#5D4037';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(x + 36, y + 16);
+      ctx.lineTo(x + 46, y + 16);
+      ctx.stroke();
+    }
+
+    // Horns
+    ctx.fillStyle = '#FFD700';
+    ctx.beginPath();
+    ctx.moveTo(x + 12, y + 2);
+    ctx.lineTo(x + 8, y - 8);
+    ctx.lineTo(x + 18, y + 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(x + 30, y + 2);
+    ctx.lineTo(x + 26, y - 8);
+    ctx.lineTo(x + 36, y + 2);
+    ctx.fill();
+
+    // HP bar above boss
+    const hpW = w + 10;
+    const hpH = 5;
+    const hpX = x - 5;
+    const hpY = y - 14;
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillRect(hpX, hpY, hpW, hpH);
+    const hpRatio = b.hp / b.maxHp;
+    const hpColor = hpRatio > 0.5 ? '#4CAF50' : hpRatio > 0.25 ? '#FF9800' : '#F44336';
+    ctx.fillStyle = hpColor;
+    ctx.fillRect(hpX + 1, hpY + 1, (hpW - 2) * hpRatio, hpH - 2);
+
+    ctx.restore();
+  }
+
+  function _drawBossFireball(fb, t) {
+    ctx.save();
+    const pulse = Math.sin(t * 0.3) * 3;
+    const gd = ctx.createRadialGradient(fb.x + 6, fb.y + 6, 0, fb.x + 6, fb.y + 6, 10 + pulse);
+    gd.addColorStop(0, 'rgba(255,255,200,1)');
+    gd.addColorStop(0.25, 'rgba(255,200,50,1)');
+    gd.addColorStop(0.5, 'rgba(255,100,20,0.9)');
+    gd.addColorStop(0.8, 'rgba(255,50,0,0.7)');
+    gd.addColorStop(1, 'rgba(200,0,0,0)');
+    ctx.fillStyle = gd;
+    ctx.beginPath();
+    ctx.arc(fb.x + 6, fb.y + 6, 10 + pulse, 0, Math.PI * 2);
+    ctx.fill();
+    // Inner core
+    ctx.fillStyle = '#FFF';
+    ctx.beginPath();
+    ctx.arc(fb.x + 6, fb.y + 6, 3, 0, Math.PI * 2);
+    ctx.fill();
+    // Outer glow ring
+    ctx.strokeStyle = 'rgba(255,100,0,0.3)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(fb.x + 6, fb.y + 6, 14 + pulse * 0.5, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
   function _drawEnemy(e) {
     const x=e.x, y=e.y, t=e.animTick;
     ctx.save();
@@ -918,6 +1833,16 @@ const PLATFORMER = (() => {
       _drawDog(x,y,e.w,e.h,t);
     } else if (e.type==='crow') {
       _drawCrow(x,y,e.w,e.h,t);
+    } else if (e.type==='hammer') {
+      _drawHammerBro(x,y,e.w,e.h,t);
+    } else if (e.type==='lakitu') {
+      _drawLakitu(x,y,e.w,e.h,t);
+    } else if (e.type==='spiny') {
+      _drawSpiny(x,y,e.w,e.h,t);
+    } else if (e.type==='piranha') {
+      _drawPiranha(x,y,e.w,e.h,t);
+    } else if (e.type==='shoomp') {
+      _drawShoomp(x,y,e.w,e.h,t);
     }
     ctx.restore();
   }
@@ -1033,6 +1958,280 @@ const PLATFORMER = (() => {
     // Shimmer
     ctx.fillStyle='rgba(100,100,200,0.2)';
     ctx.beginPath(); ctx.ellipse(x+w/2,y+h/2,6,4,0.3,0,Math.PI*2); ctx.fill();
+  }
+
+  /* ─────────────────────────────────────────
+     NEW ENEMY DRAWING
+  ───────────────────────────────────────── */
+
+  function _drawHammer(ox, oy, w, h) {
+    // Hammer projectile: brown handle + gray head
+    ctx.save();
+    const rotation = Math.sin(frameCount*0.2 + ox*0.1) * 0.5;
+    ctx.translate(ox + w/2, oy + h/2);
+    ctx.rotate(rotation);
+    // Handle
+    ctx.fillStyle = '#8B4513';
+    ctx.fillRect(-2, 0, 4, 8);
+    // Head
+    ctx.fillStyle = '#666';
+    ctx.fillRect(-5, -6, 10, 7);
+    ctx.fillStyle = '#888';
+    ctx.fillRect(-4, -5, 8, 5);
+    ctx.restore();
+  }
+
+  function _drawHammerBro(x, y, w, h, t) {
+    // Hammer Bro — stands mostly in place, throws hammers
+    // Body (blue/green shell)
+    const bodyGrad = ctx.createLinearGradient(x, y, x+w, y);
+    bodyGrad.addColorStop(0, '#2E7D32');
+    bodyGrad.addColorStop(1, '#1B5E20');
+    ctx.fillStyle = bodyGrad;
+    ctx.beginPath(); ctx.roundRect(x+3, y+10, w-6, h-12, 3); ctx.fill();
+    // Shell pattern
+    ctx.strokeStyle = 'rgba(0,0,0,0.2)'; ctx.lineWidth = 1;
+    for (let i=0; i<3; i++) {
+      ctx.beginPath();
+      ctx.moveTo(x+6+i*6, y+13); ctx.lineTo(x+6+i*6, y+h-4);
+      ctx.stroke();
+    }
+    // Head (round)
+    ctx.fillStyle = '#FFCC80';
+    ctx.beginPath(); ctx.arc(x+w/2, y+7, 8, 0, Math.PI*2); ctx.fill();
+    // Hammer in hand
+    ctx.fillStyle = '#8B4513';
+    ctx.fillRect(x+w-6, y+8, 3, 10);
+    ctx.fillStyle = '#666';
+    ctx.fillRect(x+w-9, y+7, 8, 5);
+    // Eyes
+    ctx.fillStyle = '#FFF';
+    ctx.beginPath(); ctx.arc(x+w/2-3, y+6, 2.5, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(x+w/2+3, y+6, 2.5, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#222';
+    ctx.beginPath(); ctx.arc(x+w/2-3, y+6, 1.3, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(x+w/2+3, y+6, 1.3, 0, Math.PI*2); ctx.fill();
+    // Helmet
+    ctx.fillStyle = '#8B4513';
+    ctx.beginPath(); ctx.ellipse(x+w/2, y+3, 9, 5, 0, Math.PI, 0); ctx.fill();
+    ctx.fillStyle = '#A0522D';
+    ctx.beginPath(); ctx.ellipse(x+w/2, y+3, 7, 3, 0, Math.PI, 0); ctx.fill();
+    // Feet
+    const leg = Math.floor(t/6)%2;
+    ctx.fillStyle = '#5D4037';
+    ctx.fillRect(x+5, y+h-5, 7, leg?5:3);
+    ctx.fillRect(x+w-12, y+h-5, 7, leg?3:5);
+  }
+
+  function _drawLakitu(x, y, w, h, t) {
+    // Lakitu — cloud + turtle with sunglasses
+    // Cloud
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.beginPath();
+    ctx.arc(x+w/2, y+h-8, 14, 0, Math.PI*2);
+    ctx.arc(x+w/2-12, y+h-5, 10, 0, Math.PI*2);
+    ctx.arc(x+w/2+12, y+h-5, 10, 0, Math.PI*2);
+    ctx.arc(x+w/2-6, y+h-14, 9, 0, Math.PI*2);
+    ctx.arc(x+w/2+6, y+h-14, 9, 0, Math.PI*2);
+    ctx.fill();
+    // Body (turtle shell)
+    ctx.fillStyle = '#2E7D32';
+    ctx.beginPath(); ctx.roundRect(x+6, y+4, w-12, 12, 3); ctx.fill();
+    // Shell pattern
+    ctx.strokeStyle = 'rgba(0,0,0,0.2)'; ctx.lineWidth=0.8;
+    ctx.beginPath(); ctx.moveTo(x+10, y+8); ctx.lineTo(x+w-10, y+8); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x+10, y+13); ctx.lineTo(x+w-10, y+13); ctx.stroke();
+    // Head
+    ctx.fillStyle = '#FFCC80';
+    ctx.beginPath(); ctx.arc(x+w/2, y+2, 5, 0, Math.PI*2); ctx.fill();
+    // Sunglasses
+    ctx.fillStyle = '#222';
+    ctx.fillRect(x+w/2-6, y, 5, 3);
+    ctx.fillRect(x+w/2+1, y, 5, 3);
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.fillRect(x+w/2-5, y+1, 3, 1);
+    ctx.fillRect(x+w/2+2, y+1, 3, 1);
+    // Eyes (behind glasses)
+    ctx.fillStyle = '#FFF';
+    ctx.beginPath(); ctx.arc(x+w/2-3.5, y+1.5, 1, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(x+w/2+3.5, y+1.5, 1, 0, Math.PI*2); ctx.fill();
+    // Arms holding controller
+    ctx.strokeStyle = '#FFCC80'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(x+4, y+8); ctx.lineTo(x-2, y+12); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x+w-4, y+8); ctx.lineTo(x+w+2, y+12); ctx.stroke();
+    // Controller
+    ctx.fillStyle = '#E63946';
+    ctx.fillRect(x+w/2-4, y+12, 8, 4);
+  }
+
+  function _drawSpiny(x, y, w, h, t) {
+    // Spiny — spiny shell, can't be stomped
+    const leg = Math.floor(t/6)%2;
+    // Spines on back
+    for (let i=0; i<4; i++) {
+      const sx = x + 4 + i*6;
+      ctx.fillStyle = '#FF6B6B';
+      ctx.beginPath();
+      ctx.moveTo(sx, y+4);
+      ctx.lineTo(sx+3, y-2);
+      ctx.lineTo(sx+6, y+4);
+      ctx.fill();
+    }
+    // Body
+    const bodyGrad = ctx.createRadialGradient(x+w/2, y+8, 2, x+w/2, y+8, w/2);
+    bodyGrad.addColorStop(0, '#FF8888');
+    bodyGrad.addColorStop(1, '#CC4444');
+    ctx.fillStyle = bodyGrad;
+    ctx.beginPath(); ctx.roundRect(x+3, y+6, w-6, h-8, 5); ctx.fill();
+    // Shell pattern
+    ctx.strokeStyle = 'rgba(150,30,30,0.3)'; ctx.lineWidth=1;
+    for (let i=0; i<3; i++) {
+      ctx.beginPath();
+      ctx.moveTo(x+5+i*7, y+8); ctx.lineTo(x+5+i*7, y+h-4);
+      ctx.stroke();
+    }
+    // Head
+    ctx.fillStyle = '#FFAA88';
+    ctx.beginPath(); ctx.arc(x+w/2, y+5, 6, 0, Math.PI*2); ctx.fill();
+    // Angry eyes
+    ctx.fillStyle = '#FFF';
+    ctx.beginPath(); ctx.arc(x+w/2-3, y+4, 2.5, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(x+w/2+3, y+4, 2.5, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#E63946';
+    ctx.beginPath(); ctx.arc(x+w/2-3, y+4, 1.5, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(x+w/2+3, y+4, 1.5, 0, Math.PI*2); ctx.fill();
+    // Angry eyebrows
+    ctx.strokeStyle = '#8B0000'; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.moveTo(x+w/2-6, y+1); ctx.lineTo(x+w/2-1, y+2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x+w/2+6, y+1); ctx.lineTo(x+w/2+1, y+2); ctx.stroke();
+    // Feet
+    ctx.fillStyle = '#DD6655';
+    ctx.fillRect(x+5, y+h-5, 5, leg?5:3);
+    ctx.fillRect(x+w-10, y+h-5, 5, leg?3:5);
+  }
+
+  function _drawPiranha(x, y, w, h, t) {
+    // Piranha plant — green stem + red head with teeth
+    // Only draw if not hidden (y above pipe)
+    if (y > 1000) return; // off screen / hidden
+    // Stem
+    ctx.fillStyle = '#2E7D32';
+    ctx.fillRect(x+w/2-3, y+12, 6, h-12);
+    // Stem stripes
+    ctx.fillStyle = '#388E3C';
+    ctx.fillRect(x+w/2-3, y+14, 6, 3);
+    ctx.fillRect(x+w/2-3, y+20, 6, 3);
+    // Head
+    const headY = y;
+    ctx.fillStyle = '#E63946';
+    ctx.beginPath(); ctx.ellipse(x+w/2, headY+6, w/2-2, 10, 0, 0, Math.PI*2); ctx.fill();
+    // White spots
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.beginPath(); ctx.arc(x+w/2-5, headY+3, 3, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(x+w/2+5, headY+5, 2.5, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(x+w/2-3, headY+9, 2, 0, Math.PI*2); ctx.fill();
+    // Eyes
+    ctx.fillStyle = '#FFF';
+    ctx.beginPath(); ctx.arc(x+w/2-5, headY+3, 3, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(x+w/2+5, headY+3, 3, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#222';
+    ctx.beginPath(); ctx.arc(x+w/2-5, headY+3, 1.5, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(x+w/2+5, headY+3, 1.5, 0, Math.PI*2); ctx.fill();
+    // Mouth with teeth
+    ctx.fillStyle = '#8B0000';
+    ctx.beginPath(); ctx.ellipse(x+w/2, headY+10, 7, 4, 0, 0, Math.PI*2); ctx.fill();
+    // Teeth
+    ctx.fillStyle = '#FFF';
+    for (let i=0; i<4; i++) {
+      const tx = x+w/2 - 5 + i*3.5;
+      ctx.fillRect(tx, headY+8, 2, 4);
+    }
+    // Lip
+    ctx.fillStyle = '#C0392B';
+    ctx.beginPath(); ctx.ellipse(x+w/2, headY+7, 8, 3, 0, Math.PI, 0); ctx.fill();
+    // Leaf on top
+    ctx.fillStyle = '#4CAF50';
+    ctx.beginPath();
+    ctx.ellipse(x+w/2, headY-4, 4, 6, 0, Math.PI, 0);
+    ctx.fill();
+  }
+
+  function _drawShoomp(x, y, w, h, t) {
+    // Shoomp — tiny round flying enemy with wings
+    const rotation = Math.sin(t*0.06) * 0.3;
+    ctx.save();
+    ctx.translate(x+w/2, y+h/2);
+    ctx.rotate(rotation);
+    ctx.translate(-w/2, -h/2);
+    // Body (round)
+    const bodyGrad = ctx.createRadialGradient(w/2, h/2-2, 2, w/2, h/2, w/2);
+    bodyGrad.addColorStop(0, '#FF8A65');
+    bodyGrad.addColorStop(0.7, '#D84315');
+    bodyGrad.addColorStop(1, '#BF360C');
+    ctx.fillStyle = bodyGrad;
+    ctx.beginPath(); ctx.arc(w/2, h/2, w/2-2, 0, Math.PI*2); ctx.fill();
+    // Dark bottom
+    ctx.fillStyle = '#8D6E63';
+    ctx.beginPath(); ctx.ellipse(w/2, h-4, 8, 4, 0, 0, Math.PI*2); ctx.fill();
+    // Wings (animated flutter)
+    const wingFlap = Math.sin(t*0.3)*4;
+    ctx.fillStyle = 'rgba(200,230,255,0.7)';
+    ctx.beginPath();
+    ctx.ellipse(0, h/2-2, 6, 5+wingFlap, -0.3, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(w, h/2-2, 6, 5+wingFlap, 0.3, 0, Math.PI*2); ctx.fill();
+    // Eyes (big)
+    ctx.fillStyle = '#FFF';
+    ctx.beginPath(); ctx.arc(w/2-4, h/2-4, 5, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(w/2+4, h/2-4, 5, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#222';
+    ctx.beginPath(); ctx.arc(w/2-4, h/2-4, 2.5, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(w/2+4, h/2-4, 2.5, 0, Math.PI*2); ctx.fill();
+    // Eye shine
+    ctx.fillStyle = 'rgba(255,255,255,0.7)';
+    ctx.beginPath(); ctx.arc(w/2-3, h/2-5, 1.2, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(w/2+5, h/2-5, 1.2, 0, Math.PI*2); ctx.fill();
+    // Smile
+    ctx.strokeStyle = '#4E342E'; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.arc(w/2, h/2+2, 3, 0.2, Math.PI-0.2); ctx.stroke();
+    // Little feet
+    ctx.fillStyle = '#8D6E63';
+    const leg = Math.floor(t/4)%2;
+    ctx.fillRect(w/2-5, h-4, 4, leg?4:2);
+    ctx.fillRect(w/2+1, h-4, 4, leg?2:4);
+    ctx.restore();
+  }
+
+  function _drawPipe(px, H, pw) {
+    // Green pipe for piranha plants
+    const groundY = H - T;
+    const pipeH = T * 2;
+    const py = groundY - pipeH;
+    // Pipe body
+    const pipeGrad = ctx.createLinearGradient(px, py, px+pw, py);
+    pipeGrad.addColorStop(0, '#4CAF50');
+    pipeGrad.addColorStop(0.3, '#66BB6A');
+    pipeGrad.addColorStop(0.7, '#43A047');
+    pipeGrad.addColorStop(1, '#388E3C');
+    ctx.fillStyle = pipeGrad;
+    ctx.fillRect(px, py, pw, pipeH);
+    // Pipe rim (top)
+    ctx.fillStyle = '#388E3C';
+    ctx.fillRect(px-4, py-4, pw+8, 6);
+    const rimGrad = ctx.createLinearGradient(px-4, py-4, px-4, py+2);
+    rimGrad.addColorStop(0, '#66BB6A');
+    rimGrad.addColorStop(1, '#2E7D32');
+    ctx.fillStyle = rimGrad;
+    ctx.fillRect(px-4, py-4, pw+8, 6);
+    // Dark inside
+    ctx.fillStyle = '#1B5E20';
+    ctx.fillRect(px+2, py-2, pw-4, 4);
+    // Highlight
+    ctx.fillStyle = 'rgba(255,255,255,0.15)';
+    ctx.fillRect(px+2, py+2, 5, pipeH-4);
+    // Shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.15)';
+    ctx.fillRect(px+pw-6, py+2, 5, pipeH-4);
   }
 
   /* ─────────────────────────────────────────
@@ -1162,6 +2361,16 @@ const PLATFORMER = (() => {
       ctx.fillText('👑',px+P.w/2,py-2);
     }
 
+    // Star mode color cycling overlay
+    if (P.starTimer > 0) {
+      const starColors = ['#FF6B35','#FFD700','#2ECC71','#3498DB','#E63946','#9B59B6'];
+      const ci = Math.floor(frameCount/4) % starColors.length;
+      ctx.fillStyle = starColors[ci];
+      ctx.globalAlpha = 0.25;
+      ctx.fillRect(px, py, P.w, P.h+2);
+      ctx.globalAlpha = 1;
+    }
+
     ctx.restore();
   }
 
@@ -1192,6 +2401,17 @@ const PLATFORMER = (() => {
     ctx.textAlign='right';
     ctx.font='11px Cairo,Arial';
     ctx.fillText(levelData?`${level+1}/${LEVELS.length} — ${levelData.name}`:'', W-8, 18);
+
+    // Power-up indicators
+    ctx.textAlign='left';
+    ctx.font='11px Cairo,Arial';
+    let puIndicator = '';
+    if (P.hasFire) puIndicator += '🔥';
+    if (P.starTimer > 0) puIndicator += '⭐';
+    if (puIndicator) {
+      ctx.fillStyle='rgba(255,255,255,0.6)';
+      ctx.fillText(puIndicator, 8, 34);
+    }
   }
 
   /* ─────────────────────────────────────────
@@ -1214,7 +2434,7 @@ const PLATFORMER = (() => {
 
     ctx.fillStyle='rgba(255,255,255,0.4)';
     ctx.font=`${Math.round(W*0.032)}px Cairo,Arial`;
-    ctx.fillText('🍞 خبز = قوة  |  ☕ أتاي = حياة إضافية', W/2, H*0.49);
+    ctx.fillText('🍄 مشروم = قوة  |  🔥 زهرة نار = نار  |  ⭐ نجمة = منيعة  |  ☕ أتاي = حياة', W/2, H*0.49);
 
     // Start button
     const bw=180,bh=44,bx=W/2-90,by=H*0.60;
