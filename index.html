@@ -33,16 +33,26 @@
        STYLESHEETS — Modular Architecture
        ============================================================ -->
   <!-- Shared Foundation -->
-  <link rel="stylesheet" href="shared/design-system.css?v=3.0" />
-  <link rel="stylesheet" href="shared/layout.css?v=3.0" />
-  <link rel="stylesheet" href="shared/overlays.css?v=3.0" />
+  <link rel="stylesheet" href="shared/design-system.css?V=PLACEHOLDER" />
+  <link rel="stylesheet" href="shared/layout.css?V=PLACEHOLDER" />
+  <link rel="stylesheet" href="shared/overlays.css?V=PLACEHOLDER" />
   <!-- Games -->
-  <link rel="stylesheet" href="games/sliding-puzzle/style.css?v=3.0" />
-  <link rel="stylesheet" href="games/dama/style.css?v=3.0" />
-  <link rel="stylesheet" href="games/snake/style.css?v=3.0" />
-  <link rel="stylesheet" href="games/memory/style.css?v=3.0" />
-  <link rel="stylesheet" href="games/mario/style.css?v=3.0" />
-  <link rel="stylesheet" href="shared/home.css?v=3.0" />
+  <link rel="stylesheet" href="games/sliding-puzzle/style.css?V=PLACEHOLDER" />
+  <link rel="stylesheet" href="games/dama/style.css?V=PLACEHOLDER" />
+  <link rel="stylesheet" href="games/snake/style.css?V=PLACEHOLDER" />
+  <link rel="stylesheet" href="games/memory/style.css?V=PLACEHOLDER" />
+  <link rel="stylesheet" href="games/mario/style.css?V=PLACEHOLDER" />
+  <link rel="stylesheet" href="shared/home.css?V=PLACEHOLDER" />
+
+  <!-- 🔥 CSS cache-bust: replaces V=PLACEHOLDER with fresh timestamp on every load -->
+  <script>
+    (function(){
+      var t = Date.now();
+      document.querySelectorAll('[href*="?V=PLACEHOLDER"]').forEach(function(el){
+        el.href = el.href.replace('V=PLACEHOLDER', 'v=' + t);
+      });
+    })();
+  </script>
 </head>
 
 <body>
@@ -537,14 +547,30 @@
   <!-- ============================================================
        SCRIPTS — Load Order Matters
        ============================================================ -->
-  <script src="shared/utils.js?v=2.0"></script>
-  <script src="games/sliding-puzzle/solver.js?v=2.0"></script>
-  <script src="games/sliding-puzzle/game.js?v=2.0"></script>
-  <script src="games/dama/game.js?v=2.0"></script>
-  <script src="games/snake/game.js?v=2.0"></script>
-  <script src="games/memory/game.js?v=2.0"></script>
-  <script src="games/mario/game.js?v=2.0"></script>
-  <script src="shared/app.js?v=2.0"></script>
-
+  <!-- 🔥 Auto cache-bust: loads JS with unique timestamp (sequential order preserved) -->
+  <script>
+    (function(){
+      var ver = Date.now();
+      var scripts = [
+        'shared/utils.js',
+        'games/sliding-puzzle/solver.js',
+        'games/sliding-puzzle/game.js',
+        'games/dama/game.js',
+        'games/snake/game.js',
+        'games/memory/game.js',
+        'games/mario/game.js',
+        'shared/app.js'
+      ];
+      function loadNext(i){
+        if(i >= scripts.length) return;
+        var s = document.createElement('script');
+        s.src = scripts[i] + '?v=' + ver;
+        s.onload = function(){ loadNext(i+1); };
+        s.onerror = function(){ loadNext(i+1); };
+        document.body.appendChild(s);
+      }
+      loadNext(0);
+    })();
+  </script>
 </body>
 </html>
