@@ -77,6 +77,7 @@
     const snakeSection  = document.getElementById('snakeSection');
     const memorySection = document.getElementById('memorySection');
     const marioSection  = document.getElementById('marioSection');
+    const xoSection     = document.getElementById('xoSection');
     const titleEl    = document.getElementById('mainTitle');
     const subtitleEl = document.getElementById('mainSubtitle');
     const footerEl   = document.getElementById('mainFooter');
@@ -87,6 +88,7 @@
     snakeSection.classList.remove('visible');
     memorySection.classList.remove('visible');
     marioSection.classList.remove('visible');
+    xoSection.classList.remove('visible');
 
     if (game === 'puzzle') {
       puzzleEls.forEach(e => { if (e) e.style.display = ''; });
@@ -133,5 +135,14 @@
         PLATFORMER.initialized = false;
         PLATFORMER.init();
       }, 80);
+    } else if (game === 'xo') {
+      titleEl.textContent    = '❌⭕ لعبة XO';
+      subtitleEl.textContent = 'TIC-TAC-TOE';
+      footerEl.textContent   = 'v1.0 — لعبة XO ❌⭕';
+      xoSection.classList.add('visible');
+      setTimeout(() => {
+        if (!XO.initialized) { XO.init(); }
+        else { XO.reset(); }
+      }, 60);
     }
   }

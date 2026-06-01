@@ -42,6 +42,7 @@
   <link rel="stylesheet" href="games/snake/style.css?V=PLACEHOLDER" />
   <link rel="stylesheet" href="games/memory/style.css?V=PLACEHOLDER" />
   <link rel="stylesheet" href="games/mario/style.css?V=PLACEHOLDER" />
+  <link rel="stylesheet" href="games/xo/style.css?V=PLACEHOLDER" />
   <link rel="stylesheet" href="shared/home.css?V=PLACEHOLDER" />
 
   <!-- 🔥 CSS cache-bust: replaces V=PLACEHOLDER with fresh timestamp on every load -->
@@ -112,13 +113,11 @@
         <div class="home-card-sub">MARIO PLATFORMER</div>
       </div>
 
-      <div class="home-game-card" data-game="coming">
-        <div class="home-card-coming">قريباً</div>
-        <div class="home-card-emoji">🎲</div>
-        <div style="flex:1">
-          <div class="home-card-name">ألعاب قادمة</div>
-          <div class="home-card-sub">الطاولة • Tic-Tac-Toe • وأكثر...</div>
-        </div>
+      <div class="home-game-card" data-game="xo" onclick="enterGame('xo')">
+        <div class="home-card-badge">جديدة!</div>
+        <div class="home-card-emoji">❌⭕</div>
+        <div class="home-card-name">لعبة XO</div>
+        <div class="home-card-sub">TIC-TAC-TOE</div>
       </div>
 
     </div>
@@ -509,6 +508,25 @@
       </div>
     </div>
 
+    <!-- ============================================================
+         XO SECTION — TIC-TAC-TOE
+    ============================================================ -->
+    <div id="xoSection">
+      <div class="xo-status" id="xoStatus">دورك ❌</div>
+      <div class="xo-difficulty">
+        <button class="xo-diff-btn active" onclick="XO.setDifficulty('easy')">😊 سهل</button>
+        <button class="xo-diff-btn" onclick="XO.setDifficulty('medium')">🤔 متوسط</button>
+        <button class="xo-diff-btn" onclick="XO.setDifficulty('hard')">🧠 صعب</button>
+      </div>
+      <div class="xo-board" id="xoBoard"></div>
+      <div class="xo-score">
+        <span>❌ <b id="xoScoreX">0</b></span>
+        <span>🤝 <b id="xoScoreDraw">0</b></span>
+        <span>⭕ <b id="xoScoreO">0</b></span>
+      </div>
+      <button class="btn btn-primary" onclick="XO.reset()">🔄 لعبة جديدة</button>
+    </div>
+
     <footer class="footer" id="mainFooter">v5.0 — التعبان الكلاسيكي 🐍</footer>
 
     <!-- ============================================================
@@ -559,6 +577,7 @@
         'games/snake/game.js',
         'games/memory/game.js',
         'games/mario/game.js',
+        'games/xo/game.js',
         'shared/app.js'
       ];
       function loadNext(i){
