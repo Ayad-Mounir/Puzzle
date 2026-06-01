@@ -193,7 +193,6 @@ const PLATFORMER = (() => {
 
   /* ── State ── */
   let canvas, ctx, initialized = false;
-  let displayWidth = 0, displayHeight = 0; // logical (CSS) pixels — game logic uses these
   let raf = null, state = 'start';
   let countdownTimer = 0; // frames remaining in countdown
   let frameCount = 0, score = 0, lives = 3, coinCount = 0, level = 0;
@@ -432,7 +431,7 @@ const PLATFORMER = (() => {
     }
     initialized = true;
     canvas = document.getElementById('platformerCanvas');
-    ctx    = canvas.getContext('2d', { alpha: false });
+    ctx    = canvas.getContext('2d');
     ctx.imageSmoothingEnabled = false;
 
     _resizeCanvas();
@@ -447,22 +446,15 @@ const PLATFORMER = (() => {
 
   function _resizeCanvas() {
     if (!canvas) return;
-    const dpr = window.devicePixelRatio || 1;
     const isLandscape = window.innerWidth > window.innerHeight;
     if (isLandscape) {
-      displayWidth  = window.innerWidth;
-      displayHeight = window.innerHeight - 82;
+      canvas.width  = window.innerWidth;
+      canvas.height = window.innerHeight - 82;
     } else {
       const w = Math.min(window.innerWidth, 480);
-      displayWidth  = w;
-      displayHeight = Math.round(w * 0.60);
+      canvas.width  = w;
+      canvas.height = Math.round(w * 0.60);
     }
-    // Scale canvas to physical pixels for crisp rendering
-    canvas.width  = displayWidth * dpr;
-    canvas.height = displayHeight * dpr;
-    canvas.style.width  = displayWidth + 'px';
-    canvas.style.height = displayHeight + 'px';
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.imageSmoothingEnabled = false;
     if (state === 'playing') { /* recalculate cam */ }
     else _render();
@@ -524,18 +516,8 @@ const PLATFORMER = (() => {
       if (['ArrowUp','w','W'].includes(e.key)) K.up = false;
     });
 
-    canvas.addEventListener('click', (e) => {
-      if (state === 'start' || state === 'gameover' || state === 'win') { _startGame(); return; }
-      if (state === 'paused') {
-        // Check if click is on the resume button area
-        const rect = canvas.getBoundingClientRect();
-        const cx = e.clientX - rect.left, cy = e.clientY - rect.top;
-        const W = displayWidth, H = displayHeight;
-        const bw = 180, bh = 46, bx = W/2 - 90, by = H * 0.52;
-        if (cx >= bx && cx <= bx + bw && cy >= by && cy <= by + bh) {
-          _togglePause();
-        }
-      }
+    canvas.addEventListener('click', () => {
+      if (state === 'start' || state === 'gameover' || state === 'win') _startGame();
     });
 
     _dpad('p-btn-left',  () => K.left  = true,  () => K.left  = false);
@@ -580,7 +562,7 @@ const PLATFORMER = (() => {
 
   function _loadLevel(lvl) {
     level = lvl; levelData = LEVELS[lvl];
-    const H = displayHeight;
+    const H = canvas.height;
     const groundY = H - T;
 
     currentCoins   = levelData.coins.map(c => ({ x:c.x*T, y:c.y*T, collected:false, bobOff: Math.random()*Math.PI*2 }));
@@ -775,7 +757,7 @@ const PLATFORMER = (() => {
     if (invincible > 0) invincible--;
     if (P.starTimer > 0) { P.starTimer--; if (P.starTimer === 0) AUDIO_MUSIC.stopStarman(); }
     if (screenShake > 0) screenShake -= 0.6;
-    const H = displayHeight;
+    const H = canvas.height;
     const groundY = H - T;
 
     // ── Player movement ──
@@ -801,8 +783,8 @@ const PLATFORMER = (() => {
       if (P.y > H + 80) _playerDie();
 
       // Camera (smooth)
-      const targetCam = P.x - displayWidth * 0.32;
-      camX += (Math.max(0, Math.min(targetCam, levelData.width*T - displayWidth)) - camX) * 0.12;
+      const targetCam = P.x - canvas.width * 0.32;
+      camX += (Math.max(0, Math.min(targetCam, levelData.width*T - canvas.width)) - camX) * 0.12;
 
     } else {
       P.deathTimer++;
@@ -1043,7 +1025,7 @@ const PLATFORMER = (() => {
     }
 
     // ── Power-ups ──
-    const groundY2 = displayHeight - T;
+    const groundY2 = canvas.height - T;
     for (const pu of powerUps) {
       if (pu.collected) continue;
 
@@ -1540,7 +1522,7 @@ const PLATFORMER = (() => {
   ───────────────────────────────────────── */
   function _render() {
     if (!ctx||!canvas) return;
-    const W=displayWidth, H=displayHeight;
+    const W=canvas.width, H=canvas.height;
 
     // Screen shake offset
     const shk = screenShake>0 ? (Math.random()-0.5)*screenShake : 0;
@@ -2886,15 +2868,9 @@ const PLATFORMER = (() => {
     ctx.font='bold 13px Cairo,Arial';
     ctx.textBaseline='middle';
 
-    // Level number
-    ctx.textAlign='left';
-    ctx.fillStyle='rgba(255,255,255,0.55)';
-    ctx.font='11px Cairo,Arial';
-    ctx.fillText(`مستوى ${level+1}/${LEVELS.length}`, 8, 8);
-
     const hearts = '❤️'.repeat(Math.max(0,lives));
     ctx.fillStyle='#FFF'; ctx.textAlign='left';
-    ctx.fillText(hearts, 8, 22);
+    ctx.fillText(hearts, 8, 18);
 
     ctx.textAlign='center';
     ctx.fillStyle='#FFF';
@@ -2924,38 +2900,21 @@ const PLATFORMER = (() => {
      SCREENS
   ───────────────────────────────────────── */
   function _drawCountdownOverlay(W,H) {
-    // Full-screen dark overlay
-    ctx.fillStyle='rgba(0,0,0,0.55)'; ctx.fillRect(0,0,W,H);
+    // Semi-transparent overlay
+    ctx.fillStyle='rgba(0,0,0,0.45)'; ctx.fillRect(0,0,W,H);
     ctx.textAlign='center';
     ctx.textBaseline='middle';
 
     const remaining = Math.ceil(countdownTimer / 30); // 3, 2, 1
     const display = remaining > 3 ? '3' : remaining > 2 ? '2' : remaining > 1 ? '1' : 'ابدأ!';
-    const isGo = display === 'ابدأ!';
-    const fontSize = isGo ? Math.round(W*0.12) : Math.round(W*0.16);
-    const col = isGo ? '#2ECC71' : '#F5C842';
+    const fontSize = display === 'ابدأ!' ? Math.round(W*0.1) : Math.round(W*0.14);
+    const col = display === 'ابدأ!' ? '#2ECC71' : '#F5C842';
 
-    // Pulse scale effect
-    const pulse = 1 + Math.sin(frameCount * 0.3) * 0.06;
-
-    ctx.save();
-    ctx.translate(W/2, H/2);
-    ctx.scale(pulse, pulse);
-
-    // Outer glow
-    ctx.shadowColor=col; ctx.shadowBlur=40;
+    ctx.shadowColor=col; ctx.shadowBlur=30;
     ctx.fillStyle=col;
     ctx.font=`bold ${fontSize}px Cairo,Arial`;
-    ctx.fillText(display, 0, 0);
-
-    // Inner white text for depth
+    ctx.fillText(display, W/2, H/2);
     ctx.shadowBlur=0;
-    ctx.fillStyle='#FFF';
-    ctx.globalAlpha = 0.5;
-    ctx.font=`bold ${Math.round(fontSize*0.9)}px Cairo,Arial`;
-    ctx.fillText(display, 0, 0);
-
-    ctx.restore();
   }
 
   /* ── Boss Defeat Celebration ── */
@@ -3004,18 +2963,14 @@ const PLATFORMER = (() => {
     ctx.font=`${Math.round(W*0.032)}px Cairo,Arial`;
     ctx.fillText('🍄 مشروم = قوة  |  🔥 زهرة نار = نار  |  ⭐ نجمة = منيعة  |  ☕ أتاي = حياة', W/2, H*0.49);
 
-    // Start button — large & prominent
-    const bw=220,bh=56,bx=W/2-110,by=H*0.60;
+    // Start button
+    const bw=180,bh=44,bx=W/2-90,by=H*0.60;
     const bg=ctx.createLinearGradient(bx,by,bx,by+bh);
     bg.addColorStop(0,'#E63946'); bg.addColorStop(1,'#C0392B');
     ctx.fillStyle=bg;
-    ctx.beginPath(); ctx.roundRect(bx,by,bw,bh,16); ctx.fill();
-    // Button border glow
-    ctx.strokeStyle='rgba(255,255,255,0.3)';
-    ctx.lineWidth=2;
-    ctx.beginPath(); ctx.roundRect(bx,by,bw,bh,16); ctx.stroke();
+    ctx.beginPath(); ctx.roundRect(bx,by,bw,bh,14); ctx.fill();
     ctx.fillStyle='#FFF';
-    ctx.font=`bold ${Math.round(W*0.055)}px Cairo,Arial`;
+    ctx.font=`bold ${Math.round(W*0.048)}px Cairo,Arial`;
     ctx.fillText('▶ ابدأ المغامرة',W/2,by+bh/2+1);
 
     // Level count
@@ -3028,23 +2983,10 @@ const PLATFORMER = (() => {
     ctx.fillStyle='rgba(0,0,0,0.65)'; ctx.fillRect(0,0,W,H);
     ctx.textAlign='center';
     ctx.fillStyle='#F5C842'; ctx.font=`bold ${Math.round(W*0.09)}px Cairo,Arial`;
-    ctx.fillText('⏸ متوقف',W/2,H*0.38);
-
-    // Resume button
-    const bw=180,bh=46,bx=W/2-90,by=H*0.52;
-    const bg2=ctx.createLinearGradient(bx,by,bx,by+bh);
-    bg2.addColorStop(0,'#27AE60'); bg2.addColorStop(1,'#1E8449');
-    ctx.fillStyle=bg2;
-    ctx.beginPath(); ctx.roundRect(bx,by,bw,bh,14); ctx.fill();
-    ctx.fillStyle='#FFF';
-    ctx.font=`bold ${Math.round(W*0.045)}px Cairo,Arial`;
-    ctx.textBaseline='middle';
-    ctx.fillText('▶ استمرار',W/2,by+bh/2+1);
-
-    // Tip text below
-    ctx.fillStyle='rgba(255,255,255,0.45)';
-    ctx.font=`${Math.round(W*0.028)}px Cairo,Arial`;
-    ctx.fillText('اضغط على الزر ⏸ أو ESC للمتابعة',W/2,H*0.68);
+    ctx.fillText('⏸ متوقف',W/2,H*0.44);
+    ctx.fillStyle='rgba(255,255,255,0.5)';
+    ctx.font=`${Math.round(W*0.036)}px Cairo,Arial`;
+    ctx.fillText('اضغط ⏸ للمتابعة',W/2,H*0.56);
   }
 
   function _drawEndScreen(W,H,win) {
